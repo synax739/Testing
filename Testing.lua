@@ -1,15 +1,17 @@
--- // Delta Mobil – Genel ESP & Aimbot (Syntax düzeltildi, RootPart dönüşü sağlam)
+-- // Delta Mobil – ESP + Dokunmatik Aimbot (Karakter dönmez, kamera hedefe kilitlenir)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
 -- Ayarlar
 local Settings = {
     ESP = true,
-    Aimbot = false,
-    AimbotSmoothness = 0.3,   -- 0.1 anlık, 1 yumuşak
+    Aimbot = false,             -- Menüden aç/kapat
+    AimbotSmoothness = 0.3,     -- 0.1 anlık, 0.5 hızlı
     AimbotMaxDistance = 500,
+    AimbotFOV = 30,             -- Görüş açısı (derece), ekranın ortasına bu açıda olan hedef seçilir
     TeamCheck = false,
     ESP_Box = true,
     ESP_Name = true,
@@ -19,8 +21,11 @@ local Settings = {
     ESP_MaxDistance = 1000
 }
 
+-- Dokunma durumu
+local isTouching = false
+
 -- ////////////////////////////////////////////////
--- // ESP SİSTEMİ (Sade, temiz)
+-- // ESP SİSTEMİ (Stabil)
 -- ////////////////////////////////////////////////
 local ESPObjects = {}
 
@@ -32,42 +37,22 @@ end
 local function createESP(player)
     local obj = {}
     obj.box = newDrawing("Square")
-    if obj.box then
-        obj.box.Thickness = 2
-        obj.box.Filled = false
-    end
+    if obj.box then obj.box.Thickness = 2 obj.box.Filled = false end
     obj.name = newDrawing("Text")
-    if obj.name then
-        obj.name.Size = 13
-        obj.name.Center = true
-        obj.name.Outline = true
-        obj.name.Color = Color3.new(1,1,1)
-    end
+    if obj.name then obj.name.Size = 13 obj.name.Center = true obj.name.Outline = true obj.name.Color = Color3.new(1,1,1) end
     obj.dist = newDrawing("Text")
-    if obj.dist then
-        obj.dist.Size = 12
-        obj.dist.Center = true
-        obj.dist.Outline = true
-        obj.dist.Color = Color3.new(1,1,1)
-    end
+    if obj.dist then obj.dist.Size = 12 obj.dist.Center = true obj.dist.Outline = true obj.dist.Color = Color3.new(1,1,1) end
     obj.hpBg = newDrawing("Square")
-    if obj.hpBg then
-        obj.hpBg.Filled = true
-        obj.hpBg.Color = Color3.fromRGB(40,40,40)
-    end
+    if obj.hpBg then obj.hpBg.Filled = true obj.hpBg.Color = Color3.fromRGB(40,40,40) end
     obj.hpBar = newDrawing("Square")
-    if obj.hpBar then
-        obj.hpBar.Filled = true
-    end
+    if obj.hpBar then obj.hpBar.Filled = true end
     ESPObjects[player] = obj
 end
 
 local function removeESP(player)
     local obj = ESPObjects[player]
     if not obj then return end
-    for _, v in pairs(obj) do
-        pcall(function() v:Remove() end)
-    end
+    for _, v in pairs(obj) do pcall(function() v:Remove() end) end
     ESPObjects[player] = nil
 end
 
@@ -194,16 +179,16 @@ local function updateESP()
 end
 
 -- ////////////////////////////////////////////////
--- // AIMBOT (Kamera + RootPart eşzamanlı döner)
+-- // AIMBOT (FOV tabanlı, sadece kamera)
 -- ////////////////////////////////////////////////
-local currentAimbotTarget = nil
-
 local function getBestTarget()
     local best = nil
-    local bestDist = Settings.AimbotMaxDistance
+    local smallestAngle = Settings.AimbotFOV + 1
     local myChar = LocalPlayer.Character
     if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return nil end
     local myPos = myChar.HumanoidRootPart.Position
+    local camPos = Camera.CFrame.Position
+    local lookDir = Camera.CFrame.LookVector
 
     for _, player in ipairs(Players:GetPlayers()) do
         if player == LocalPlayer then continue end
@@ -215,13 +200,15 @@ local function getBestTarget()
         local hum = char:FindFirstChildOfClass("Humanoid")
         if not (head or hrp) or not hum or hum.Health <= 0 then continue end
         local targetPart = head or hrp
-        local dist = (myPos - targetPart.Position).Magnitude
-        if dist < bestDist then
-            local toTarget = (targetPart.Position - Camera.CFrame.Position).Unit
-            if Camera.CFrame.LookVector:Dot(toTarget) > 0.05 then
-                bestDist = dist
-                best = player
-            end
+        local targetPos = targetPart.Position
+        local dist = (myPos - targetPos).Magnitude
+        if dist > Settings.AimbotMaxDistance then continue end
+
+        local toTarget = (targetPos - camPos).Unit
+        local angle = math.acos(math.clamp(lookDir:Dot(toTarget), -1, 1)) * (180 / math.pi)
+        if angle < smallestAngle then
+            smallestAngle = angle
+            best = player
         end
     end
     return best
@@ -229,72 +216,50 @@ end
 
 local function aimAtTarget(targetPlayer)
     local char = targetPlayer.Character
-    if not char then return false end
+    if not char then return end
     local head = char:FindFirstChild("Head")
     local hrp = char:FindFirstChild("HumanoidRootPart")
     local targetPart = head or hrp
-    if not targetPart then return false end
+    if not targetPart then return end
 
     local targetPos = targetPart.Position
-    local camPos = Camera.CFrame.Position
-
-    -- Kamera
-    local lookAt = CFrame.lookAt(camPos, targetPos)
+    local lookAt = CFrame.lookAt(Camera.CFrame.Position, targetPos)
     local smooth = Settings.AimbotSmoothness
     if smooth <= 0.1 then
         Camera.CFrame = lookAt
     else
         Camera.CFrame = Camera.CFrame:Lerp(lookAt, 1 / smooth)
     end
-
-    -- Karakter RootPart'ını hedefe döndür (yatay düzlemde)
-    local myChar = LocalPlayer.Character
-    if myChar and myChar:FindFirstChild("HumanoidRootPart") then
-        local root = myChar.HumanoidRootPart
-        local flatTarget = Vector3.new(targetPos.X, root.Position.Y, targetPos.Z)
-        local rootLookAt = CFrame.lookAt(root.Position, flatTarget)
-        pcall(function()
-            root.CFrame = smooth <= 0.1 and rootLookAt or root.CFrame:Lerp(rootLookAt, 1 / smooth)
-        end)
-    end
-    return true
 end
 
+-- ////////////////////////////////////////////////
+-- // DOKUNMA KONTROLÜ
+-- ////////////////////////////////////////////////
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.UserInputType == Enum.UserInputType.Touch or
+       input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isTouching = true
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or
+       input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isTouching = false
+    end
+end)
+
+-- ////////////////////////////////////////////////
+-- // AIMBOT GÜNCELLEME
+-- ////////////////////////////////////////////////
 local function updateAimbot()
-    if not Settings.Aimbot then
-        currentAimbotTarget = nil
-        return
-    end
+    if not Settings.Aimbot then return end
+    if not isTouching then return end  -- Sadece dokununca çalış
 
-    if currentAimbotTarget then
-        local char = currentAimbotTarget.Character
-        local valid = false
-        if char then
-            local head = char:FindFirstChild("Head")
-            local hrp = char:FindFirstChild("HumanoidRootPart")
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if (head or hrp) and hum and hum.Health > 0 then
-                local targetPart = head or hrp
-                local myChar = LocalPlayer.Character
-                if myChar and myChar:FindFirstChild("HumanoidRootPart") then
-                    local dist = (myChar.HumanoidRootPart.Position - targetPart.Position).Magnitude
-                    if dist <= Settings.AimbotMaxDistance then
-                        valid = true
-                    end
-                end
-            end
-        end
-        if not valid then
-            currentAimbotTarget = nil
-        end
-    end
-
-    if not currentAimbotTarget then
-        currentAimbotTarget = getBestTarget()
-    end
-
-    if currentAimbotTarget then
-        aimAtTarget(currentAimbotTarget)
+    local target = getBestTarget()
+    if target then
+        aimAtTarget(target)
     end
 end
 
@@ -375,7 +340,7 @@ local function createMobileMenu()
 end
 
 -- ////////////////////////////////////////////////
--- // TEMİZLİK VE BAŞLATMA
+-- // BAŞLATMA
 -- ////////////////////////////////////////////////
 Players.PlayerRemoving:Connect(function(p) removeESP(p) end)
 Players.PlayerAdded:Connect(function(p)
@@ -391,4 +356,4 @@ end)
 
 createMobileMenu()
 
-print("✅ ESP ve Aimbot (tam düzeltme) aktif! Sağ üstteki butona bas.")
+print("✅ ESP aktif, Aimbot sadece dokununca kilitlenir!")
