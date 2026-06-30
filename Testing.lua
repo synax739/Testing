@@ -1,5 +1,4 @@
--- // Delta ESP Script (Sade - Tracer ve Head Dot Kaldırıldı)
-
+-- // Delta ESP - Sadece Önündekiler (Açı Kontrollü)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
@@ -7,256 +6,212 @@ local LocalPlayer = Players.LocalPlayer
 
 -- ESP Ayarları
 local ESP = {
-    BoxEnabled = true,
-    NameEnabled = true,
-    DistanceEnabled = true,
-    HealthBarEnabled = true,
+    Box = true,
+    Name = true,
+    Distance = true,
+    HealthBar = true,
     MaxDistance = 1000,
     TeamCheck = false,
     VisibleColor = Color3.fromRGB(0, 255, 0),
     InvisibleColor = Color3.fromRGB(255, 0, 0)
 }
 
-local ESPData = {}
+local ESPObjects = {}
 
--- Drawing oluşturma (Delta uyumlu)
-local function CreateDrawing(type)
-    local success, drawing = pcall(function()
+-- Delta uyumlu drawing oluşturma
+local function newDrawing(type)
+    local success, d = pcall(function()
         return Drawing.new(type)
     end)
-    if success and drawing then
-        return drawing
-    end
-    return nil
+    return success and d or nil
 end
 
--- World to Screen
-local function WorldToScreen(pos)
-    local screenPos, onScreen = Camera:WorldToViewportPoint(pos)
-    return Vector2.new(screenPos.X, screenPos.Y), onScreen
+-- Oyuncu için ESP çizimlerini oluştur
+local function createESP(player)
+    local obj = {}
+    obj.box = newDrawing("Square")
+    if obj.box then
+        obj.box.Thickness = 2
+        obj.box.Filled = false
+    end
+    obj.name = newDrawing("Text")
+    if obj.name then
+        obj.name.Size = 13
+        obj.name.Center = true
+        obj.name.Outline = true
+        obj.name.Color = Color3.new(1,1,1)
+    end
+    obj.dist = newDrawing("Text")
+    if obj.dist then
+        obj.dist.Size = 12
+        obj.dist.Center = true
+        obj.dist.Outline = true
+        obj.dist.Color = Color3.new(1,1,1)
+    end
+    obj.hpBg = newDrawing("Square")
+    if obj.hpBg then
+        obj.hpBg.Filled = true
+        obj.hpBg.Color = Color3.fromRGB(40,40,40)
+    end
+    obj.hpBar = newDrawing("Square")
+    if obj.hpBar then
+        obj.hpBar.Filled = true
+    end
+    ESPObjects[player] = obj
 end
 
--- Takım kontrolü
-local function IsTeammate(player)
-    if LocalPlayer.Team and player.Team then
-        return LocalPlayer.Team == player.Team
+-- Oyuncunun ESP'sini sil
+local function removeESP(player)
+    local obj = ESPObjects[player]
+    if not obj then return end
+    for _, v in pairs(obj) do
+        pcall(function() v:Remove() end)
     end
-    return false
+    ESPObjects[player] = nil
 end
 
--- ESP oluştur
-local function CreateESP(player)
-    if ESPData[player] then RemoveESP(player) end
-
-    local drawings = {}
-
-    -- Box
-    drawings.Box = CreateDrawing("Square")
-    if drawings.Box then
-        drawings.Box.Visible = false
-        drawings.Box.Thickness = 2
-        drawings.Box.Filled = false
-    end
-
-    -- Name
-    drawings.Name = CreateDrawing("Text")
-    if drawings.Name then
-        drawings.Name.Visible = false
-        drawings.Name.Size = 13
-        drawings.Name.Center = true
-        drawings.Name.Outline = true
-        drawings.Name.Color = Color3.fromRGB(255, 255, 255)
-    end
-
-    -- Distance
-    drawings.Distance = CreateDrawing("Text")
-    if drawings.Distance then
-        drawings.Distance.Visible = false
-        drawings.Distance.Size = 12
-        drawings.Distance.Center = true
-        drawings.Distance.Outline = true
-        drawings.Distance.Color = Color3.fromRGB(255, 255, 255)
-    end
-
-    -- Health Bar arka plan
-    drawings.HealthBg = CreateDrawing("Square")
-    if drawings.HealthBg then
-        drawings.HealthBg.Visible = false
-        drawings.HealthBg.Filled = true
-        drawings.HealthBg.Color = Color3.fromRGB(40, 40, 40)
-    end
-
-    -- Health Bar dolu kısım
-    drawings.HealthBar = CreateDrawing("Square")
-    if drawings.HealthBar then
-        drawings.HealthBar.Visible = false
-        drawings.HealthBar.Filled = true
-    end
-
-    ESPData[player] = drawings
-end
-
--- ESP sil
-local function RemoveESP(player)
-    if not ESPData[player] then return end
-    for _, d in pairs(ESPData[player]) do
-        if d then pcall(function() d:Remove() end) end
-    end
-    ESPData[player] = nil
-end
-
--- Bounding Box hesapla
-local function GetBoundingBox(character)
+-- Karakterin kameraya göre önde mi arkada mı olduğunu kontrol et
+local function isInFront(character)
     local head = character:FindFirstChild("Head")
     local hrp = character:FindFirstChild("HumanoidRootPart")
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-
-    if not (head or hrp) or not humanoid then return nil end
-
-    local cf, size = character:GetBoundingBox()
-    local center = cf.Position
-    local height = size.Y
-
-    local topPos = center + Vector3.new(0, height/2, 0)
-    local bottomPos = center + Vector3.new(0, -height/2, 0)
-
-    local top, topOnScreen = WorldToScreen(topPos)
-    local bottom, bottomOnScreen = WorldToScreen(bottomPos)
-
-    if not topOnScreen and not bottomOnScreen then return nil end
-
-    local boxHeight = math.abs(top.Y - bottom.Y)
-    local boxWidth = boxHeight * 0.55
-
-    return {
-        Top = top,
-        Bottom = bottom,
-        Height = boxHeight,
-        Width = boxWidth,
-        Center = Vector2.new((top.X + bottom.X) / 2, (top.Y + bottom.Y) / 2),
-        OnScreen = true
-    }
+    if not (head or hrp) then return false end
+    local targetPos = (head or hrp).Position
+    local cameraPos = Camera.CFrame.Position
+    local cameraLook = Camera.CFrame.LookVector
+    local toTarget = (targetPos - cameraPos).Unit
+    local dot = cameraLook:Dot(toTarget)
+    -- dot > 0 ise önünde, dot <= 0 ise arkasında
+    return dot > 0
 end
 
--- Ana Render
-local function RenderESP()
+-- Ana render döngüsü
+local function render()
+    local myChar = LocalPlayer.Character
     for _, player in ipairs(Players:GetPlayers()) do
         if player == LocalPlayer then continue end
-
-        if ESP.TeamCheck and IsTeammate(player) then
-            if ESPData[player] then RemoveESP(player) end
+        if ESP.TeamCheck and LocalPlayer.Team and player.Team and LocalPlayer.Team == player.Team then
+            if ESPObjects[player] then removeESP(player) end
             continue
         end
 
-        local character = player.Character
-        if not character then
-            if ESPData[player] then RemoveESP(player) end
+        local char = player.Character
+        if not char then
+            if ESPObjects[player] then removeESP(player) end
             continue
         end
 
-        local head = character:FindFirstChild("Head")
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
-        local hrp = character:FindFirstChild("HumanoidRootPart")
-
-        if not (head or hrp) or not humanoid then continue end
-
-        -- Mesafe
-        local distance = 0
-        local myChar = LocalPlayer.Character
-        if myChar and myChar:FindFirstChild("HumanoidRootPart") then
-            distance = (myChar.HumanoidRootPart.Position - (hrp or head).Position).Magnitude
+        local head = char:FindFirstChild("Head")
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not (head or hrp) or not hum then
+            if ESPObjects[player] then removeESP(player) end
+            continue
         end
 
-        if distance > ESP.MaxDistance then
-            if ESPData[player] then
-                for _, d in pairs(ESPData[player]) do
+        -- **Önemli: Sadece baktığın yöndekileri göster**
+        if not isInFront(char) then
+            if ESPObjects[player] then
+                -- Tüm çizimleri gizle
+                for _, d in pairs(ESPObjects[player]) do
                     if d then d.Visible = false end
                 end
             end
             continue
         end
 
-        if not ESPData[player] then
-            CreateESP(player)
+        -- Mesafe
+        local dist = 0
+        if myChar and myChar:FindFirstChild("HumanoidRootPart") then
+            dist = (myChar.HumanoidRootPart.Position - (hrp or head).Position).Magnitude
+        end
+        if dist > ESP.MaxDistance then
+            if ESPObjects[player] then
+                for _, d in pairs(ESPObjects[player]) do d.Visible = false end
+            end
+            continue
         end
 
-        local drawings = ESPData[player]
-        if not drawings then continue end
+        -- ESP objelerini oluştur (eğer yoksa)
+        if not ESPObjects[player] then
+            createESP(player)
+        end
+        local obj = ESPObjects[player]
+        if not obj then continue end
 
-        local box = GetBoundingBox(character)
-        if not box then continue end
+        -- Bounding box hesapla
+        local cf, size = char:GetBoundingBox()
+        local topPos = cf.Position + Vector3.new(0, size.Y/2, 0)
+        local bottomPos = cf.Position + Vector3.new(0, -size.Y/2, 0)
+        local topScr, topOn = Camera:WorldToViewportPoint(topPos)
+        local bottomScr, botOn = Camera:WorldToViewportPoint(bottomPos)
+        if not topOn and not botOn then
+            for _, d in pairs(obj) do d.Visible = false end
+            continue
+        end
 
-        -- Görünürlük kontrolü (raycast)
-        local isVisible = false
+        local boxHeight = math.abs(topScr.Y - bottomScr.Y)
+        local boxWidth = boxHeight * 0.55
+        local boxX = topScr.X - boxWidth/2
+        local boxY = topScr.Y
+
+        -- Görünürlük (duvar arkası)
+        local visible = false
         pcall(function()
-            local raycastParams = RaycastParams.new()
-            local ignoreList = {character}
-            if myChar then table.insert(ignoreList, myChar) end
-            raycastParams.FilterDescendantsInstances = ignoreList
-            raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-
-            local rayOrigin = Camera.CFrame.Position
-            local rayDir = (head.Position - rayOrigin).Unit * 500
-            local result = workspace:Raycast(rayOrigin, rayDir, raycastParams)
-            isVisible = (result == nil)
+            local params = RaycastParams.new()
+            params.FilterDescendantsInstances = {char, myChar or nil}
+            params.FilterType = Enum.RaycastFilterType.Blacklist
+            local ray = workspace:Raycast(Camera.CFrame.Position, ((head or hrp).Position - Camera.CFrame.Position).Unit * 500, params)
+            visible = ray == nil
         end)
-
-        local color = isVisible and ESP.VisibleColor or ESP.InvisibleColor
+        local col = visible and ESP.VisibleColor or ESP.InvisibleColor
 
         -- Box
-        if ESP.BoxEnabled and drawings.Box then
-            drawings.Box.Visible = true
-            drawings.Box.Position = Vector2.new(box.Top.X - box.Width/2, box.Top.Y)
-            drawings.Box.Size = Vector2.new(box.Width, box.Height)
-            drawings.Box.Color = color
+        if ESP.Box and obj.box then
+            obj.box.Visible = true
+            obj.box.Position = Vector2.new(boxX, boxY)
+            obj.box.Size = Vector2.new(boxWidth, boxHeight)
+            obj.box.Color = col
         end
 
         -- Name
-        if ESP.NameEnabled and drawings.Name then
-            drawings.Name.Visible = true
-            drawings.Name.Text = player.Name
-            drawings.Name.Position = Vector2.new(box.Top.X, box.Top.Y - 15)
+        if ESP.Name and obj.name then
+            obj.name.Visible = true
+            obj.name.Text = player.Name
+            obj.name.Position = Vector2.new(topScr.X, topScr.Y - 15)
         end
 
         -- Distance
-        if ESP.DistanceEnabled and drawings.Distance then
-            drawings.Distance.Visible = true
-            drawings.Distance.Text = math.floor(distance) .. "m"
-            drawings.Distance.Position = Vector2.new(box.Bottom.X, box.Bottom.Y + 2)
+        if ESP.Distance and obj.dist then
+            obj.dist.Visible = true
+            obj.dist.Text = math.floor(dist) .. "m"
+            obj.dist.Position = Vector2.new(bottomScr.X, bottomScr.Y + 2)
         end
 
         -- Health Bar
-        if ESP.HealthBarEnabled and drawings.HealthBg and drawings.HealthBar then
-            local healthPercent = humanoid.Health / humanoid.MaxHealth
-            local barX = box.Top.X - box.Width/2 - 6
-            local barHeight = box.Height
+        if ESP.HealthBar and obj.hpBg and obj.hpBar then
+            local hp = hum.Health / hum.MaxHealth
+            local barX = boxX - 8
+            local barH = boxHeight
+            obj.hpBg.Visible = true
+            obj.hpBg.Position = Vector2.new(barX, boxY)
+            obj.hpBg.Size = Vector2.new(3, barH)
 
-            drawings.HealthBg.Visible = true
-            drawings.HealthBg.Position = Vector2.new(barX, box.Top.Y)
-            drawings.HealthBg.Size = Vector2.new(3, barHeight)
-
-            local filledHeight = barHeight * healthPercent
-            drawings.HealthBar.Visible = true
-            drawings.HealthBar.Position = Vector2.new(barX, box.Top.Y + (barHeight - filledHeight))
-            drawings.HealthBar.Size = Vector2.new(3, filledHeight)
-
-            local r = math.clamp(255 * (1 - healthPercent) * 2, 0, 255)
-            local g = math.clamp(255 * healthPercent * 2, 0, 255)
-            drawings.HealthBar.Color = Color3.fromRGB(r, g, 0)
+            local fillH = barH * hp
+            obj.hpBar.Visible = true
+            obj.hpBar.Position = Vector2.new(barX, boxY + (barH - fillH))
+            obj.hpBar.Size = Vector2.new(3, fillH)
+            obj.hpBar.Color = Color3.fromRGB(255 * (1 - hp), 255 * hp, 0)
         end
     end
 end
 
--- Oyuncu eventleri
-Players.PlayerAdded:Connect(function(player)
-    player.CharacterAdded:Connect(function()
-        if ESPData[player] then RemoveESP(player) end
+-- Temizlik
+Players.PlayerRemoving:Connect(function(p) removeESP(p) end)
+Players.PlayerAdded:Connect(function(p)
+    p.CharacterAdded:Connect(function()
+        if ESPObjects[p] then removeESP(p) end
     end)
 end)
 
-Players.PlayerRemoving:Connect(function(player)
-    RemoveESP(player)
-end)
-
--- Render bağla
-RunService.RenderStepped:Connect(RenderESP)
+-- Başlat
+RunService.RenderStepped:Connect(render)
