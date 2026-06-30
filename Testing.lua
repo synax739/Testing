@@ -1,17 +1,14 @@
--- // Delta Mobil – ESP + Dokunmatik Aimbot (Karakter dönmez, kamera hedefe kilitlenir)
+-- // Delta Mobil – ESP + Anlık Aimbot (Ekran Merkezine En Yakın Hedef)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
 -- Ayarlar
 local Settings = {
     ESP = true,
-    Aimbot = false,             -- Menüden aç/kapat
-    AimbotSmoothness = 0.3,     -- 0.1 anlık, 0.5 hızlı
-    AimbotMaxDistance = 500,
-    AimbotFOV = 30,             -- Görüş açısı (derece), ekranın ortasına bu açıda olan hedef seçilir
+    Aimbot = false,
+    AimbotMaxDistance = 500,   -- Aimbot'un çalışacağı max mesafe
     TeamCheck = false,
     ESP_Box = true,
     ESP_Name = true,
@@ -21,11 +18,8 @@ local Settings = {
     ESP_MaxDistance = 1000
 }
 
--- Dokunma durumu
-local isTouching = false
-
 -- ////////////////////////////////////////////////
--- // ESP SİSTEMİ (Stabil)
+-- // ESP SİSTEMİ (Çalışan son sürüm)
 -- ////////////////////////////////////////////////
 local ESPObjects = {}
 
@@ -179,16 +173,16 @@ local function updateESP()
 end
 
 -- ////////////////////////////////////////////////
--- // AIMBOT (FOV tabanlı, sadece kamera)
+-- // AIMBOT (Ekran Merkezine En Yakın Hedef)
 -- ////////////////////////////////////////////////
-local function getBestTarget()
-    local best = nil
-    local smallestAngle = Settings.AimbotFOV + 1
+local function getClosestToCenter()
+    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    local closestPlayer = nil
+    local closestDist = math.huge
+
     local myChar = LocalPlayer.Character
     if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return nil end
     local myPos = myChar.HumanoidRootPart.Position
-    local camPos = Camera.CFrame.Position
-    local lookDir = Camera.CFrame.LookVector
 
     for _, player in ipairs(Players:GetPlayers()) do
         if player == LocalPlayer then continue end
@@ -200,66 +194,36 @@ local function getBestTarget()
         local hum = char:FindFirstChildOfClass("Humanoid")
         if not (head or hrp) or not hum or hum.Health <= 0 then continue end
         local targetPart = head or hrp
-        local targetPos = targetPart.Position
-        local dist = (myPos - targetPos).Magnitude
+        local dist = (myPos - targetPart.Position).Magnitude
         if dist > Settings.AimbotMaxDistance then continue end
 
-        local toTarget = (targetPos - camPos).Unit
-        local angle = math.acos(math.clamp(lookDir:Dot(toTarget), -1, 1)) * (180 / math.pi)
-        if angle < smallestAngle then
-            smallestAngle = angle
-            best = player
+        local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+        if onScreen then
+            local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+            if screenDist < closestDist then
+                closestDist = screenDist
+                closestPlayer = player
+            end
         end
     end
-    return best
+    return closestPlayer
 end
 
-local function aimAtTarget(targetPlayer)
-    local char = targetPlayer.Character
-    if not char then return end
-    local head = char:FindFirstChild("Head")
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    local targetPart = head or hrp
-    if not targetPart then return end
-
-    local targetPos = targetPart.Position
-    local lookAt = CFrame.lookAt(Camera.CFrame.Position, targetPos)
-    local smooth = Settings.AimbotSmoothness
-    if smooth <= 0.1 then
-        Camera.CFrame = lookAt
-    else
-        Camera.CFrame = Camera.CFrame:Lerp(lookAt, 1 / smooth)
-    end
-end
-
--- ////////////////////////////////////////////////
--- // DOKUNMA KONTROLÜ
--- ////////////////////////////////////////////////
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.UserInputType == Enum.UserInputType.Touch or
-       input.UserInputType == Enum.UserInputType.MouseButton1 then
-        isTouching = true
-    end
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch or
-       input.UserInputType == Enum.UserInputType.MouseButton1 then
-        isTouching = false
-    end
-end)
-
--- ////////////////////////////////////////////////
--- // AIMBOT GÜNCELLEME
--- ////////////////////////////////////////////////
 local function updateAimbot()
     if not Settings.Aimbot then return end
-    if not isTouching then return end  -- Sadece dokununca çalış
 
-    local target = getBestTarget()
+    local target = getClosestToCenter()
     if target then
-        aimAtTarget(target)
+        local char = target.Character
+        if char then
+            local head = char:FindFirstChild("Head")
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            local targetPart = head or hrp
+            if targetPart then
+                -- Anında kamerayı hedefin kafasına/rootuna çevir
+                Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, targetPart.Position)
+            end
+        end
     end
 end
 
@@ -356,4 +320,4 @@ end)
 
 createMobileMenu()
 
-print("✅ ESP aktif, Aimbot sadece dokununca kilitlenir!")
+print("✅ ESP ve Ekran Merkezine Anlık Kilitlenen Aimbot aktif!")
