@@ -1,6 +1,6 @@
--- // Delta - Mobil ESP & Aimbot (Tamir Edilmiş)
--- // Aimbot: hedef kilitlendikten sonra bırakmaz, sürekli hedeftedir.
--- // ESP: hareketliyken kayma yapmaz, stabil.
+-- // Delta Mobil ESP + Aimbot (Kökten Çözüm)
+-- // Aimbot: Kamera + karakter hedefe döner, mermiler şaşmaz.
+-- // ESP: Head/HumanoidRootPart tabanlı sağlam kutu, titreme yok.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -8,13 +8,11 @@ local UserInputService = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
--- ////////////////////////////////////////////////
--- // AYARLAR
--- ////////////////////////////////////////////////
+-- Ayarlar
 local Settings = {
     ESP = true,
     Aimbot = false,
-    AimbotSmoothness = 0.3,    -- Düşük = hızlı (0.1 anlık)
+    AimbotSmoothness = 0.3,    -- 0.1 = anlık, 1 = yumuşak
     AimbotMaxDistance = 500,
     TeamCheck = false,
     ESP_Box = true,
@@ -26,7 +24,7 @@ local Settings = {
 }
 
 -- ////////////////////////////////////////////////
--- // ESP SİSTEMİ (Stabil, Head + RootPart tabanlı)
+-- // ESP SİSTEMİ (STABİL)
 -- ////////////////////////////////////////////////
 local ESPObjects = {}
 
@@ -58,28 +56,28 @@ local function removeESP(player)
 end
 
 local function isInFront(position)
-    local cameraPos = Camera.CFrame.Position
-    local toTarget = (position - cameraPos).Unit
+    local camPos = Camera.CFrame.Position
+    local toTarget = (position - camPos).Unit
     return Camera.CFrame.LookVector:Dot(toTarget) > 0
 end
 
 local function getESPBox(character)
     local head = character:FindFirstChild("Head")
     local hrp = character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return nil end
     local hum = character:FindFirstChildOfClass("Humanoid")
+    if not hrp then return nil end
 
-    -- Üst nokta: Head varsa head, yoksa hrp'den 2.5 yukarı
-    local topPos, bottomPos
+    -- Üst sınır: Head varsa head'in en tepesi, yoksa hrp'nin 2.5 üstü
+    local topPos
     if head then
-        topPos = head.Position + Vector3.new(0, 1.2, 0) -- başın biraz üstü
+        topPos = head.Position + Vector3.new(0, head.Size.Y / 2, 0)
     else
         topPos = hrp.Position + Vector3.new(0, 2.5, 0)
     end
-    -- Alt nokta: hrp'den aşağı (yaklaşık ayak hizası)
-    bottomPos = hrp.Position - Vector3.new(0, 2.8, 0)
 
-    -- Ekrana yansıt
+    -- Alt sınır: Humanoid HipHeight ile yer seviyesi
+    local bottomPos = hrp.Position - Vector3.new(0, hum.HipHeight, 0)
+
     local topScr, topOn = Camera:WorldToViewportPoint(topPos)
     local bottomScr, botOn = Camera:WorldToViewportPoint(bottomPos)
 
@@ -114,17 +112,12 @@ local function updateESP()
             continue
         end
         local hrp = char:FindFirstChild("HumanoidRootPart")
-        if not hrp then
-            if ESPObjects[player] then removeESP(player) end
-            continue
-        end
         local hum = char:FindFirstChildOfClass("Humanoid")
-        if not hum or hum.Health <= 0 then
+        if not hrp or not hum or hum.Health <= 0 then
             if ESPObjects[player] then removeESP(player) end
             continue
         end
 
-        -- ESP kapalıysa çizimleri gizle
         if not Settings.ESP then
             if ESPObjects[player] then
                 for _, d in pairs(ESPObjects[player]) do d.Visible = false end
@@ -132,7 +125,6 @@ local function updateESP()
             continue
         end
 
-        -- Yalnızca kameranın önünde olanları göster
         if not isInFront(hrp.Position) then
             if ESPObjects[player] then
                 for _, d in pairs(ESPObjects[player]) do d.Visible = false end
@@ -140,7 +132,6 @@ local function updateESP()
             continue
         end
 
-        -- Mesafe kontrolü
         local dist = 0
         if myChar and myChar:FindFirstChild("HumanoidRootPart") then
             dist = (myChar.HumanoidRootPart.Position - hrp.Position).Magnitude
@@ -152,38 +143,33 @@ local function updateESP()
             continue
         end
 
-        -- ESP objesini oluştur
         if not ESPObjects[player] then createESP(player) end
         local obj = ESPObjects[player]
         if not obj then continue end
 
-        -- Box hesapla
         local box = getESPBox(char)
         if not box then
             for _, d in pairs(obj) do d.Visible = false end
             continue
         end
 
-        -- Box çiz
+        -- Çizimler
         if Settings.ESP_Box and obj.box then
             obj.box.Visible = true
             obj.box.Position = box.Position
             obj.box.Size = box.Size
             obj.box.Color = Settings.ESP_BoxColor
         end
-        -- İsim
         if Settings.ESP_Name and obj.name then
             obj.name.Visible = true
             obj.name.Text = player.Name
             obj.name.Position = box.TopCenter - Vector2.new(0, 15)
         end
-        -- Mesafe
         if Settings.ESP_Distance and obj.dist then
             obj.dist.Visible = true
             obj.dist.Text = math.floor(dist) .. "m"
             obj.dist.Position = box.BottomCenter + Vector2.new(0, 2)
         end
-        -- Can barı
         if Settings.ESP_HealthBar and obj.hpBg and obj.hpBar then
             local hp = hum.Health / hum.MaxHealth
             local barX = box.Position.X - 8
@@ -201,7 +187,7 @@ local function updateESP()
 end
 
 -- ////////////////////////////////////////////////
--- // AIMBOT (Kilit sistemi, hareketli hedefte kopmaz)
+-- // AIMBOT (KAMERA + KARAKTER DÖNDÜRME)
 -- ////////////////////////////////////////////////
 local currentAimbotTarget = nil
 
@@ -224,9 +210,8 @@ local function getBestTarget()
         local targetPart = head or hrp
         local dist = (myPos - targetPart.Position).Magnitude
         if dist < bestDist then
-            -- Kameranın önünde olma şartı (ilk seçimde)
             local toTarget = (targetPart.Position - Camera.CFrame.Position).Unit
-            if Camera.CFrame.LookVector:Dot(toTarget) > 0.05 then -- küçük bir eşik
+            if Camera.CFrame.LookVector:Dot(toTarget) > 0.05 then
                 bestDist = dist
                 best = player
             end
@@ -244,7 +229,8 @@ local function aimAtTarget(targetPlayer)
     if not targetPart then return false end
 
     local targetPos = targetPart.Position
-    local lookAt = CFrame.lookAt(Camera.CFrame.Position, targetPos)
+    local camPos = Camera.CFrame.Position
+    local lookAt = CFrame.lookAt(camPos, targetPos)
 
     local smooth = Settings.AimbotSmoothness
     if smooth <= 0.1 then
@@ -253,6 +239,21 @@ local function aimAtTarget(targetPlayer)
         local alpha = 1 / smooth
         if alpha > 1 then alpha = 1 end
         Camera.CFrame = Camera.CFrame:Lerp(lookAt, alpha)
+    end
+
+    -- Karakteri hedefe döndür (silah doğruluğu için KRİTİK)
+    local myChar = LocalPlayer.Character
+    if myChar and myChar:FindFirstChild("HumanoidRootPart") then
+        local root = myChar.HumanoidRootPart
+        -- Karakter sadece yatayda dönsün, yukarı/aşağı bakmasın
+        local flatTarget = Vector3.new(targetPos.X, root.Position.Y, targetPos.Z)
+        local rootLookAt = CFrame.lookAt(root.Position, flatTarget)
+        -- Yumuşatmayı karakter için de uygula
+        if smooth <= 0.1 then
+            root.CFrame = rootLookAt
+        else
+            root.CFrame = root.CFrame:Lerp(rootLookAt, alpha)
+        end
     end
     return true
 end
@@ -273,9 +274,12 @@ local function updateAimbot()
             local hum = char:FindFirstChildOfClass("Humanoid")
             if (head or hrp) and hum and hum.Health > 0 then
                 local targetPart = head or hrp
-                local dist = (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position - targetPart.Position).Magnitude or 0
-                if dist <= Settings.AimbotMaxDistance then
-                    valid = true
+                local myChar = LocalPlayer.Character
+                if myChar and myChar:FindFirstChild("HumanoidRootPart") then
+                    local dist = (myChar.HumanoidRootPart.Position - targetPart.Position).Magnitude
+                    if dist <= Settings.AimbotMaxDistance then
+                        valid = true
+                    end
                 end
             end
         end
@@ -284,12 +288,10 @@ local function updateAimbot()
         end
     end
 
-    -- Yeni hedef bul
     if not currentAimbotTarget then
         currentAimbotTarget = getBestTarget()
     end
 
-    -- Varsa kilitlen
     if currentAimbotTarget then
         aimAtTarget(currentAimbotTarget)
     end
@@ -389,5 +391,4 @@ end)
 
 createMobileMenu()
 
-print("✅ Mobil ESP & Gelişmiş Aimbot hazır!")
-print("🔴 Sağ üstteki butona dokunarak menüyü aç.")
+print("✅ Mobil ESP ve Aimbot (tam düzeltme) aktif!")
