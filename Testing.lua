@@ -1,11 +1,6 @@
--- // Roblox Rivals - Mobil ESP & Aimbot (Özel Düzeltme)
--- // Aimbot: RootPart + Humanoid.AutoRotate kontrolü, yatay kilit.
--- // ESP: GetExtentsSize ile titremesiz kutu.
--- // Not: Oyun 1. şahıs veya 3. şahıs fark etmez.
-
+-- // Delta Mobil – Genel ESP & Aimbot (Syntax düzeltildi, RootPart dönüşü sağlam)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
@@ -13,7 +8,7 @@ local LocalPlayer = Players.LocalPlayer
 local Settings = {
     ESP = true,
     Aimbot = false,
-    AimbotSmoothness = 0.3,    -- 0.1 anlık, 1 yumuşak
+    AimbotSmoothness = 0.3,   -- 0.1 anlık, 1 yumuşak
     AimbotMaxDistance = 500,
     TeamCheck = false,
     ESP_Box = true,
@@ -25,7 +20,7 @@ local Settings = {
 }
 
 -- ////////////////////////////////////////////////
--- // ESP (GetExtentsSize tabanlı stabil kutu)
+-- // ESP SİSTEMİ (Sade, temiz)
 -- ////////////////////////////////////////////////
 local ESPObjects = {}
 
@@ -37,22 +32,42 @@ end
 local function createESP(player)
     local obj = {}
     obj.box = newDrawing("Square")
-    if obj.box then obj.box.Thickness = 2 obj.box.Filled = false end
+    if obj.box then
+        obj.box.Thickness = 2
+        obj.box.Filled = false
+    end
     obj.name = newDrawing("Text")
-    if obj.name then obj.name.Size = 13 obj.name.Center = true obj.name.Outline = true obj.name.Color = Color3.new(1,1,1) end
+    if obj.name then
+        obj.name.Size = 13
+        obj.name.Center = true
+        obj.name.Outline = true
+        obj.name.Color = Color3.new(1,1,1)
+    end
     obj.dist = newDrawing("Text")
-    if obj.dist then obj.dist.Size = 12 obj.dist.Center = true obj.dist.Outline = true obj.dist.Color = Color3.new(1,1,1) end
+    if obj.dist then
+        obj.dist.Size = 12
+        obj.dist.Center = true
+        obj.dist.Outline = true
+        obj.dist.Color = Color3.new(1,1,1)
+    end
     obj.hpBg = newDrawing("Square")
-    if obj.hpBg then obj.hpBg.Filled = true obj.hpBg.Color = Color3.fromRGB(40,40,40) end
+    if obj.hpBg then
+        obj.hpBg.Filled = true
+        obj.hpBg.Color = Color3.fromRGB(40,40,40)
+    end
     obj.hpBar = newDrawing("Square")
-    if obj.hpBar then obj.hpBar.Filled = true end
+    if obj.hpBar then
+        obj.hpBar.Filled = true
+    end
     ESPObjects[player] = obj
 end
 
 local function removeESP(player)
     local obj = ESPObjects[player]
     if not obj then return end
-    for _, v in pairs(obj) do pcall(function() v:Remove() end) end
+    for _, v in pairs(obj) do
+        pcall(function() v:Remove() end)
+    end
     ESPObjects[player] = nil
 end
 
@@ -63,16 +78,13 @@ local function isInFront(position)
 end
 
 local function getESPBox(character)
+    local head = character:FindFirstChild("Head")
     local hrp = character:FindFirstChild("HumanoidRootPart")
     local hum = character:FindFirstChildOfClass("Humanoid")
     if not hrp or not hum or hum.Health <= 0 then return nil end
 
-    -- Karakterin tüm parçalarını kapsayan dünya hizalı kutu
-    local boundingCFrame, boundingSize = character:GetExtentsSize()
-    if not boundingCFrame or not boundingSize then return nil end
-
-    local topPos = boundingCFrame * Vector3.new(0, boundingSize.Y/2, 0)
-    local bottomPos = boundingCFrame * Vector3.new(0, -boundingSize.Y/2, 0)
+    local topPos = head and (head.Position + Vector3.new(0, 1.5, 0)) or (hrp.Position + Vector3.new(0, 2.5, 0))
+    local bottomPos = hrp.Position - Vector3.new(0, hum.HipHeight, 0)
 
     local topScr, topOn = Camera:WorldToViewportPoint(topPos)
     local bottomScr, botOn = Camera:WorldToViewportPoint(bottomPos)
@@ -182,7 +194,7 @@ local function updateESP()
 end
 
 -- ////////////////////////////////////////////////
--- // AIMBOT (RootPart Yatay Dönüş + Humanoid AutoRotate Kapalı)
+-- // AIMBOT (Kamera + RootPart eşzamanlı döner)
 -- ////////////////////////////////////////////////
 local currentAimbotTarget = nil
 
@@ -225,34 +237,25 @@ local function aimAtTarget(targetPlayer)
 
     local targetPos = targetPart.Position
     local camPos = Camera.CFrame.Position
-    local lookAt = CFrame.lookAt(camPos, targetPos)
 
+    -- Kamera
+    local lookAt = CFrame.lookAt(camPos, targetPos)
     local smooth = Settings.AimbotSmoothness
     if smooth <= 0.1 then
         Camera.CFrame = lookAt
     else
-        local alpha = 1 / smooth
-        if alpha > 1 then alpha = 1 end
-        Camera.CFrame = Camera.CFrame:Lerp(lookAt, alpha)
+        Camera.CFrame = Camera.CFrame:Lerp(lookAt, 1 / smooth)
     end
 
-    -- Karakter RootPart'ı YATAY olarak hedefe döndür (aşağı/yukarı bakma olmaz)
+    -- Karakter RootPart'ını hedefe döndür (yatay düzlemde)
     local myChar = LocalPlayer.Character
     if myChar and myChar:FindFirstChild("HumanoidRootPart") then
         local root = myChar.HumanoidRootPart
-        local humanoid = myChar:FindFirstChildOfClass("Humanoid")
-        if humanoid then
-            humanoid.AutoRotate = false  -- kendi dönüşünü engelle
-        end
-
         local flatTarget = Vector3.new(targetPos.X, root.Position.Y, targetPos.Z)
         local rootLookAt = CFrame.lookAt(root.Position, flatTarget)
-        -- Yumuşatma uygula
-        if smooth <= 0.1 then
-            root.CFrame = rootLookAt
-        else
-            root.CFrame = root.CFrame:Lerp(rootLookAt, math.clamp(alpha * 2, 0.1, 1))
-        end
+        pcall(function()
+            root.CFrame = smooth <= 0.1 and rootLookAt or root.CFrame:Lerp(rootLookAt, 1 / smooth)
+        end)
     end
     return true
 end
@@ -388,4 +391,4 @@ end)
 
 createMobileMenu()
 
-print("✅ Rivals Mobil ESP & Aimbot (Düzeltildi) aktif!")
+print("✅ ESP ve Aimbot (tam düzeltme) aktif! Sağ üstteki butona bas.")
