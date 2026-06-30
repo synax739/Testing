@@ -1,29 +1,39 @@
--- // Delta ESP - Tek Renk, Sadece Önündekiler
+-- // Delta - Mobil ESP & Aimbot & Menü
+-- // Tamamen dokunmatik kontrollere uygun
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
--- Ayarlar
-local ESP = {
-    Box = true,
-    Name = true,
-    Distance = true,
-    HealthBar = true,
-    MaxDistance = 1000,
+-- ////////////////////////////////////////////////
+-- // AYARLAR
+-- ////////////////////////////////////////////////
+local Settings = {
+    ESP = true,
+    Aimbot = false,
+    AimbotSmoothness = 3,   -- Düşük = daha hızlı, yüksek = yumuşak
+    AimbotMaxDistance = 500,
     TeamCheck = false,
-    BoxColor = Color3.fromRGB(255, 0, 0) -- Tek renk, hep kırmızı
+    ESP_Box = true,
+    ESP_Name = true,
+    ESP_Distance = true,
+    ESP_HealthBar = true,
+    ESP_BoxColor = Color3.fromRGB(255, 0, 0),
+    ESP_MaxDistance = 1000
 }
 
+-- ////////////////////////////////////////////////
+-- // ESP SİSTEMİ (Aynı)
+-- ////////////////////////////////////////////////
 local ESPObjects = {}
 
--- Drawing
 local function newDrawing(type)
     local s, d = pcall(function() return Drawing.new(type) end)
     return s and d or nil
 end
 
--- ESP oluştur
 local function createESP(player)
     local obj = {}
     obj.box = newDrawing("Square")
@@ -39,7 +49,6 @@ local function createESP(player)
     ESPObjects[player] = obj
 end
 
--- ESP sil
 local function removeESP(player)
     local obj = ESPObjects[player]
     if not obj then return end
@@ -47,7 +56,6 @@ local function removeESP(player)
     ESPObjects[player] = nil
 end
 
--- Önde mi kontrolü
 local function isInFront(character)
     local head = character:FindFirstChild("Head")
     local hrp = character:FindFirstChild("HumanoidRootPart")
@@ -58,23 +66,19 @@ local function isInFront(character)
     return Camera.CFrame.LookVector:Dot(toTarget) > 0
 end
 
--- Ana döngü
-local function render()
+local function updateESP()
     local myChar = LocalPlayer.Character
     for _, player in ipairs(Players:GetPlayers()) do
         if player == LocalPlayer then continue end
-
-        if ESP.TeamCheck and LocalPlayer.Team and player.Team and LocalPlayer.Team == player.Team then
+        if Settings.TeamCheck and LocalPlayer.Team and player.Team and LocalPlayer.Team == player.Team then
             if ESPObjects[player] then removeESP(player) end
             continue
         end
-
         local char = player.Character
         if not char then
             if ESPObjects[player] then removeESP(player) end
             continue
         end
-
         local head = char:FindFirstChild("Head")
         local hrp = char:FindFirstChild("HumanoidRootPart")
         local hum = char:FindFirstChildOfClass("Humanoid")
@@ -83,7 +87,13 @@ local function render()
             continue
         end
 
-        -- Sadece öndekiler
+        if not Settings.ESP then
+            if ESPObjects[player] then
+                for _, d in pairs(ESPObjects[player]) do d.Visible = false end
+            end
+            continue
+        end
+
         if not isInFront(char) then
             if ESPObjects[player] then
                 for _, d in pairs(ESPObjects[player]) do d.Visible = false end
@@ -91,12 +101,11 @@ local function render()
             continue
         end
 
-        -- Mesafe
         local dist = 0
         if myChar and myChar:FindFirstChild("HumanoidRootPart") then
             dist = (myChar.HumanoidRootPart.Position - (hrp or head).Position).Magnitude
         end
-        if dist > ESP.MaxDistance then
+        if dist > Settings.ESP_MaxDistance then
             if ESPObjects[player] then
                 for _, d in pairs(ESPObjects[player]) do d.Visible = false end
             end
@@ -107,7 +116,6 @@ local function render()
         local obj = ESPObjects[player]
         if not obj then continue end
 
-        -- Bounding box
         local cf, size = char:GetBoundingBox()
         local topPos = cf.Position + Vector3.new(0, size.Y/2, 0)
         local bottomPos = cf.Position - Vector3.new(0, size.Y/2, 0)
@@ -123,46 +131,174 @@ local function render()
         local boxX = topScr.X - boxW/2
         local boxY = topScr.Y
 
-        -- Box (tek renk, görünürlük kontrolü yok)
-        if ESP.Box and obj.box then
+        if Settings.ESP_Box and obj.box then
             obj.box.Visible = true
             obj.box.Position = Vector2.new(boxX, boxY)
             obj.box.Size = Vector2.new(boxW, boxH)
-            obj.box.Color = ESP.BoxColor -- Sabit renk
+            obj.box.Color = Settings.ESP_BoxColor
         end
-
-        -- İsim
-        if ESP.Name and obj.name then
+        if Settings.ESP_Name and obj.name then
             obj.name.Visible = true
             obj.name.Text = player.Name
             obj.name.Position = Vector2.new(topScr.X, topScr.Y - 15)
         end
-
-        -- Mesafe
-        if ESP.Distance and obj.dist then
+        if Settings.ESP_Distance and obj.dist then
             obj.dist.Visible = true
             obj.dist.Text = math.floor(dist) .. "m"
             obj.dist.Position = Vector2.new(bottomScr.X, bottomScr.Y + 2)
         end
-
-        -- Can barı
-        if ESP.HealthBar and obj.hpBg and obj.hpBar then
+        if Settings.ESP_HealthBar and obj.hpBg and obj.hpBar then
             local hp = hum.Health / hum.MaxHealth
             local barX = boxX - 8
             obj.hpBg.Visible = true
             obj.hpBg.Position = Vector2.new(barX, boxY)
             obj.hpBg.Size = Vector2.new(3, boxH)
-
             local fill = boxH * hp
             obj.hpBar.Visible = true
             obj.hpBar.Position = Vector2.new(barX, boxY + (boxH - fill))
             obj.hpBar.Size = Vector2.new(3, fill)
-            obj.hpBar.Color = Color3.fromRGB(255 * (1 - hp), 255 * hp, 0) -- yeşil->kırmızı
+            obj.hpBar.Color = Color3.fromRGB(255 * (1 - hp), 255 * hp, 0)
         end
     end
 end
 
--- Eventler
+-- ////////////////////////////////////////////////
+-- // AIMBOT (Mobil Uyumlu: Camera CFrame değiştirir)
+-- ////////////////////////////////////////////////
+local function getClosestTarget()
+    local closestPlayer = nil
+    local closestDistance = Settings.AimbotMaxDistance
+    local myChar = LocalPlayer.Character
+    if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return nil end
+    local myPos = myChar.HumanoidRootPart.Position
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LocalPlayer then continue end
+        if Settings.TeamCheck and LocalPlayer.Team and player.Team and LocalPlayer.Team == player.Team then continue end
+        local char = player.Character
+        if not char then continue end
+        local head = char:FindFirstChild("Head")
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not (head or hrp) or not hum or hum.Health <= 0 then continue end
+        local targetPart = head or hrp
+        local distance = (myPos - targetPart.Position).Magnitude
+        if distance < closestDistance then
+            local targetPos = targetPart.Position
+            local cameraPos = Camera.CFrame.Position
+            local toTarget = (targetPos - cameraPos).Unit
+            if Camera.CFrame.LookVector:Dot(toTarget) > 0 then
+                closestDistance = distance
+                closestPlayer = player
+            end
+        end
+    end
+    return closestPlayer
+end
+
+local function aimAtTarget(targetPlayer)
+    if not targetPlayer then return end
+    local char = targetPlayer.Character
+    if not char then return end
+    local head = char:FindFirstChild("Head")
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local targetPart = head or hrp
+    if not targetPart then return end
+
+    local targetPos = targetPart.Position
+    -- Yeni CFrame hedefe bakacak şekilde oluştur
+    local lookAt = CFrame.lookAt(Camera.CFrame.Position, targetPos)
+    -- Yumuşatma uygula
+    local smooth = Settings.AimbotSmoothness
+    if smooth <= 0 then smooth = 1 end
+    local alpha = 1 / smooth
+    Camera.CFrame = Camera.CFrame:Lerp(lookAt, alpha)
+end
+
+-- ////////////////////////////////////////////////
+-- // MOBİL MENÜ (Dokunmatik)
+-- ////////////////////////////////////////////////
+local function createMobileMenu()
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "MobileESP_Aimbot"
+    gui.Parent = game.CoreGui or game.Players.LocalPlayer:WaitForChild("PlayerGui")
+    gui.ResetOnSpawn = false
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+    -- Menüyü açıp kapatan buton (sağ üstte yuvarlak)
+    local toggleMenuBtn = Instance.new("TextButton")
+    toggleMenuBtn.Size = UDim2.new(0, 45, 0, 45)
+    toggleMenuBtn.Position = UDim2.new(1, -55, 0, 10)
+    toggleMenuBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    toggleMenuBtn.Text = "E"
+    toggleMenuBtn.TextColor3 = Color3.new(1,1,1)
+    toggleMenuBtn.Font = Enum.Font.SourceSansBold
+    toggleMenuBtn.TextSize = 22
+    toggleMenuBtn.Parent = gui
+    -- Yuvarlak yap
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(1, 0)
+    corner.Parent = toggleMenuBtn
+
+    -- Menü çerçevesi (başlangıçta gizli)
+    local menuFrame = Instance.new("Frame")
+    menuFrame.Name = "MainMenu"
+    menuFrame.Size = UDim2.new(0, 200, 0, 260)
+    menuFrame.Position = UDim2.new(1, -210, 0, 65)
+    menuFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    menuFrame.BorderSizePixel = 0
+    menuFrame.Visible = false
+    menuFrame.Parent = gui
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 30)
+    title.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    title.Text = "ESP & Aimbot"
+    title.TextColor3 = Color3.new(1,1,1)
+    title.Font = Enum.Font.SourceSansBold
+    title.TextSize = 16
+    title.Parent = menuFrame
+
+    -- Menü butonları (büyük, parmakla rahat basılır)
+    local yOffset = 35
+    local function addToggle(name, default, callback)
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, -10, 0, 32)
+        btn.Position = UDim2.new(0, 5, 0, yOffset)
+        btn.BackgroundColor3 = default and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 0, 0)
+        btn.Text = name .. ": " .. (default and "ON" or "OFF")
+        btn.TextColor3 = Color3.new(1,1,1)
+        btn.Font = Enum.Font.SourceSans
+        btn.TextSize = 14
+        btn.Parent = menuFrame
+
+        local toggled = default
+        btn.MouseButton1Click:Connect(function()
+            toggled = not toggled
+            btn.Text = name .. ": " .. (toggled and "ON" or "OFF")
+            btn.BackgroundColor3 = toggled and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 0, 0)
+            if callback then callback(toggled) end
+        end)
+        yOffset = yOffset + 35
+    end
+
+    addToggle("ESP", Settings.ESP, function(val) Settings.ESP = val end)
+    addToggle("Aimbot", Settings.Aimbot, function(val) Settings.Aimbot = val end)
+    addToggle("Team Check", Settings.TeamCheck, function(val) Settings.TeamCheck = val end)
+    addToggle("Box", Settings.ESP_Box, function(val) Settings.ESP_Box = val end)
+    addToggle("Name", Settings.ESP_Name, function(val) Settings.ESP_Name = val end)
+    addToggle("Distance", Settings.ESP_Distance, function(val) Settings.ESP_Distance = val end)
+    addToggle("Health Bar", Settings.ESP_HealthBar, function(val) Settings.ESP_HealthBar = val end)
+
+    -- Buton işlevi: menüyü aç/kapat
+    toggleMenuBtn.MouseButton1Click:Connect(function()
+        menuFrame.Visible = not menuFrame.Visible
+    end)
+end
+
+-- ////////////////////////////////////////////////
+-- // TEMİZLİK VE ÇALIŞTIRMA
+-- ////////////////////////////////////////////////
 Players.PlayerRemoving:Connect(function(p) removeESP(p) end)
 Players.PlayerAdded:Connect(function(p)
     p.CharacterAdded:Connect(function()
@@ -170,4 +306,18 @@ Players.PlayerAdded:Connect(function(p)
     end)
 end)
 
-RunService.RenderStepped:Connect(render)
+-- Ana döngü (ESP + Aimbot)
+RunService.RenderStepped:Connect(function()
+    updateESP()
+    if Settings.Aimbot then
+        local target = getClosestTarget()
+        if target then
+            aimAtTarget(target)
+        end
+    end
+end)
+
+-- Menüyü oluştur
+createMobileMenu()
+
+print("Mobil ESP & Aimbot aktif! Sağ üstteki kırmızı butona basarak menüyü aç.")
