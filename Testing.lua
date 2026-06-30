@@ -1,6 +1,7 @@
--- // Delta Mobil ESP + Aimbot (Kökten Çözüm)
--- // Aimbot: Kamera + karakter hedefe döner, mermiler şaşmaz.
--- // ESP: Head/HumanoidRootPart tabanlı sağlam kutu, titreme yok.
+-- // Roblox Rivals - Mobil ESP & Aimbot (Özel Düzeltme)
+-- // Aimbot: RootPart + Humanoid.AutoRotate kontrolü, yatay kilit.
+-- // ESP: GetExtentsSize ile titremesiz kutu.
+-- // Not: Oyun 1. şahıs veya 3. şahıs fark etmez.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -12,7 +13,7 @@ local LocalPlayer = Players.LocalPlayer
 local Settings = {
     ESP = true,
     Aimbot = false,
-    AimbotSmoothness = 0.3,    -- 0.1 = anlık, 1 = yumuşak
+    AimbotSmoothness = 0.3,    -- 0.1 anlık, 1 yumuşak
     AimbotMaxDistance = 500,
     TeamCheck = false,
     ESP_Box = true,
@@ -24,7 +25,7 @@ local Settings = {
 }
 
 -- ////////////////////////////////////////////////
--- // ESP SİSTEMİ (STABİL)
+-- // ESP (GetExtentsSize tabanlı stabil kutu)
 -- ////////////////////////////////////////////////
 local ESPObjects = {}
 
@@ -62,21 +63,16 @@ local function isInFront(position)
 end
 
 local function getESPBox(character)
-    local head = character:FindFirstChild("Head")
     local hrp = character:FindFirstChild("HumanoidRootPart")
     local hum = character:FindFirstChildOfClass("Humanoid")
-    if not hrp then return nil end
+    if not hrp or not hum or hum.Health <= 0 then return nil end
 
-    -- Üst sınır: Head varsa head'in en tepesi, yoksa hrp'nin 2.5 üstü
-    local topPos
-    if head then
-        topPos = head.Position + Vector3.new(0, head.Size.Y / 2, 0)
-    else
-        topPos = hrp.Position + Vector3.new(0, 2.5, 0)
-    end
+    -- Karakterin tüm parçalarını kapsayan dünya hizalı kutu
+    local boundingCFrame, boundingSize = character:GetExtentsSize()
+    if not boundingCFrame or not boundingSize then return nil end
 
-    -- Alt sınır: Humanoid HipHeight ile yer seviyesi
-    local bottomPos = hrp.Position - Vector3.new(0, hum.HipHeight, 0)
+    local topPos = boundingCFrame * Vector3.new(0, boundingSize.Y/2, 0)
+    local bottomPos = boundingCFrame * Vector3.new(0, -boundingSize.Y/2, 0)
 
     local topScr, topOn = Camera:WorldToViewportPoint(topPos)
     local bottomScr, botOn = Camera:WorldToViewportPoint(bottomPos)
@@ -153,7 +149,6 @@ local function updateESP()
             continue
         end
 
-        -- Çizimler
         if Settings.ESP_Box and obj.box then
             obj.box.Visible = true
             obj.box.Position = box.Position
@@ -187,7 +182,7 @@ local function updateESP()
 end
 
 -- ////////////////////////////////////////////////
--- // AIMBOT (KAMERA + KARAKTER DÖNDÜRME)
+-- // AIMBOT (RootPart Yatay Dönüş + Humanoid AutoRotate Kapalı)
 -- ////////////////////////////////////////////////
 local currentAimbotTarget = nil
 
@@ -241,18 +236,22 @@ local function aimAtTarget(targetPlayer)
         Camera.CFrame = Camera.CFrame:Lerp(lookAt, alpha)
     end
 
-    -- Karakteri hedefe döndür (silah doğruluğu için KRİTİK)
+    -- Karakter RootPart'ı YATAY olarak hedefe döndür (aşağı/yukarı bakma olmaz)
     local myChar = LocalPlayer.Character
     if myChar and myChar:FindFirstChild("HumanoidRootPart") then
         local root = myChar.HumanoidRootPart
-        -- Karakter sadece yatayda dönsün, yukarı/aşağı bakmasın
+        local humanoid = myChar:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.AutoRotate = false  -- kendi dönüşünü engelle
+        end
+
         local flatTarget = Vector3.new(targetPos.X, root.Position.Y, targetPos.Z)
         local rootLookAt = CFrame.lookAt(root.Position, flatTarget)
-        -- Yumuşatmayı karakter için de uygula
+        -- Yumuşatma uygula
         if smooth <= 0.1 then
             root.CFrame = rootLookAt
         else
-            root.CFrame = root.CFrame:Lerp(rootLookAt, alpha)
+            root.CFrame = root.CFrame:Lerp(rootLookAt, math.clamp(alpha * 2, 0.1, 1))
         end
     end
     return true
@@ -264,7 +263,6 @@ local function updateAimbot()
         return
     end
 
-    -- Mevcut hedef geçerli mi?
     if currentAimbotTarget then
         local char = currentAimbotTarget.Character
         local valid = false
@@ -383,7 +381,6 @@ Players.PlayerAdded:Connect(function(p)
     end)
 end)
 
--- Ana döngü
 RunService.RenderStepped:Connect(function()
     updateESP()
     updateAimbot()
@@ -391,4 +388,4 @@ end)
 
 createMobileMenu()
 
-print("✅ Mobil ESP ve Aimbot (tam düzeltme) aktif!")
+print("✅ Rivals Mobil ESP & Aimbot (Düzeltildi) aktif!")
