@@ -1,5 +1,5 @@
--- // Delta - Mobil ESP & Aimbot & Menü
--- // Tamamen dokunmatik kontrollere uygun
+-- // Delta - Mobil ESP & Aimbot (Hızlı Aimbot Düzeltmesi)
+-- // Aimbot: Anında hedefe kilitlenir, yumuşaklık ayarı düşürüldü.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -13,7 +13,7 @@ local LocalPlayer = Players.LocalPlayer
 local Settings = {
     ESP = true,
     Aimbot = false,
-    AimbotSmoothness = 3,   -- Düşük = daha hızlı, yüksek = yumuşak
+    AimbotSmoothness = 0.5,   -- Çok hızlı: 0.1 = ışın hızı, 1 = hızlı, 5 = yumuşak
     AimbotMaxDistance = 500,
     TeamCheck = false,
     ESP_Box = true,
@@ -25,7 +25,7 @@ local Settings = {
 }
 
 -- ////////////////////////////////////////////////
--- // ESP SİSTEMİ (Aynı)
+-- // ESP SİSTEMİ
 -- ////////////////////////////////////////////////
 local ESPObjects = {}
 
@@ -163,7 +163,7 @@ local function updateESP()
 end
 
 -- ////////////////////////////////////////////////
--- // AIMBOT (Mobil Uyumlu: Camera CFrame değiştirir)
+-- // AIMBOT (Mobil İçin Hızlı ve Doğrudan)
 -- ////////////////////////////////////////////////
 local function getClosestTarget()
     local closestPlayer = nil
@@ -184,9 +184,9 @@ local function getClosestTarget()
         local targetPart = head or hrp
         local distance = (myPos - targetPart.Position).Magnitude
         if distance < closestDistance then
-            local targetPos = targetPart.Position
+            -- Hedef kameranın önünde mi?
             local cameraPos = Camera.CFrame.Position
-            local toTarget = (targetPos - cameraPos).Unit
+            local toTarget = (targetPart.Position - cameraPos).Unit
             if Camera.CFrame.LookVector:Dot(toTarget) > 0 then
                 closestDistance = distance
                 closestPlayer = player
@@ -206,17 +206,23 @@ local function aimAtTarget(targetPlayer)
     if not targetPart then return end
 
     local targetPos = targetPart.Position
-    -- Yeni CFrame hedefe bakacak şekilde oluştur
     local lookAt = CFrame.lookAt(Camera.CFrame.Position, targetPos)
-    -- Yumuşatma uygula
+
+    -- Yeni: Hızlı aimbot için agresif lerp veya direkt atama
     local smooth = Settings.AimbotSmoothness
-    if smooth <= 0 then smooth = 1 end
-    local alpha = 1 / smooth
-    Camera.CFrame = Camera.CFrame:Lerp(lookAt, alpha)
+    if smooth <= 0.1 then
+        -- Anında kilitlenme
+        Camera.CFrame = lookAt
+    else
+        local alpha = 1 / smooth
+        -- alpha'nın 1'i geçmesine izin verme, maksimum hızda 1
+        if alpha > 1 then alpha = 1 end
+        Camera.CFrame = Camera.CFrame:Lerp(lookAt, alpha)
+    end
 end
 
 -- ////////////////////////////////////////////////
--- // MOBİL MENÜ (Dokunmatik)
+-- // MOBİL MENÜ
 -- ////////////////////////////////////////////////
 local function createMobileMenu()
     local gui = Instance.new("ScreenGui")
@@ -225,7 +231,7 @@ local function createMobileMenu()
     gui.ResetOnSpawn = false
     gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
-    -- Menüyü açıp kapatan buton (sağ üstte yuvarlak)
+    -- Menü açma butonu
     local toggleMenuBtn = Instance.new("TextButton")
     toggleMenuBtn.Size = UDim2.new(0, 45, 0, 45)
     toggleMenuBtn.Position = UDim2.new(1, -55, 0, 10)
@@ -235,12 +241,11 @@ local function createMobileMenu()
     toggleMenuBtn.Font = Enum.Font.SourceSansBold
     toggleMenuBtn.TextSize = 22
     toggleMenuBtn.Parent = gui
-    -- Yuvarlak yap
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(1, 0)
     corner.Parent = toggleMenuBtn
 
-    -- Menü çerçevesi (başlangıçta gizli)
+    -- Ana menü çerçevesi
     local menuFrame = Instance.new("Frame")
     menuFrame.Name = "MainMenu"
     menuFrame.Size = UDim2.new(0, 200, 0, 260)
@@ -259,7 +264,6 @@ local function createMobileMenu()
     title.TextSize = 16
     title.Parent = menuFrame
 
-    -- Menü butonları (büyük, parmakla rahat basılır)
     local yOffset = 35
     local function addToggle(name, default, callback)
         local btn = Instance.new("TextButton")
@@ -290,7 +294,6 @@ local function createMobileMenu()
     addToggle("Distance", Settings.ESP_Distance, function(val) Settings.ESP_Distance = val end)
     addToggle("Health Bar", Settings.ESP_HealthBar, function(val) Settings.ESP_HealthBar = val end)
 
-    -- Buton işlevi: menüyü aç/kapat
     toggleMenuBtn.MouseButton1Click:Connect(function()
         menuFrame.Visible = not menuFrame.Visible
     end)
@@ -306,7 +309,7 @@ Players.PlayerAdded:Connect(function(p)
     end)
 end)
 
--- Ana döngü (ESP + Aimbot)
+-- Ana döngü
 RunService.RenderStepped:Connect(function()
     updateESP()
     if Settings.Aimbot then
@@ -317,7 +320,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Menüyü oluştur
 createMobileMenu()
 
-print("Mobil ESP & Aimbot aktif! Sağ üstteki kırmızı butona basarak menüyü aç.")
+print("Mobil ESP & Hızlı Aimbot aktif! Sağ üstteki butona bas.")
