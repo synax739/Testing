@@ -1,4 +1,4 @@
--- // Delta Mobil – Rivals: ESP (Gelişmiş Raycast) + Aimbot + Speed Hack + Hareketli Panel
+-- // Delta Mobil – Rivals: ESP (Görüş Renkli) + Aimbot + Speed + Hareketli Panel
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -6,9 +6,8 @@ local UserInputService = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
--- // AYARLAR
+-- AYARLAR
 local cfg = {
-    -- ESP
     esp_on = true,
     esp_box = true,
     esp_name = true,
@@ -17,21 +16,18 @@ local cfg = {
     esp_maxDist = 1000,
     esp_visibleColor = Color3.fromRGB(0, 255, 0),
     esp_hiddenColor = Color3.fromRGB(255, 0, 0),
-    -- Aimbot
     aim_on = false,
-    aim_mode = "Always",  -- "Always" veya "Touch"
+    aim_mode = "Always",
     aim_fov = 30,
     aim_maxDist = 500,
     aim_smoothBase = 2.0,
-    -- Speed
     speed_on = false,
-    speed_value = 30,      -- varsayılan yürüme hızı (normal: 16)
-    -- Takım
+    speed_value = 30,
     team_check = false
 }
 
 -- ////////////////////////////////////////////////
--- // ESP SİSTEMİ (Çift Raycast: Head + RootPart)
+-- // ESP SİSTEMİ
 -- ////////////////////////////////////////////////
 local ESPData = {}
 
@@ -67,7 +63,6 @@ local function isInFront(pos)
     return Camera.CFrame.LookVector:Dot((pos - camPos).Unit) > 0
 end
 
--- GELİŞMİŞ GÖRÜŞ KONTROLÜ
 local function isTargetVisible(character)
     if not character then return false end
     local head = character:FindFirstChild("Head")
@@ -79,12 +74,9 @@ local function isTargetVisible(character)
 
     local origin = Camera.CFrame.Position + Camera.CFrame.LookVector * 0.8
 
-    -- Kontrol edilecek noktalar (Head varsa + gövde)
     local targets = {}
-    if head then
-        table.insert(targets, head.Position)
-    end
-    table.insert(targets, hrp.Position + Vector3.new(0, 1.5, 0))  -- göğüs
+    if head then table.insert(targets, head.Position) end
+    table.insert(targets, hrp.Position + Vector3.new(0, 1.5, 0))
 
     for _, targetPos in ipairs(targets) do
         local direction = (targetPos - origin).Unit * 500
@@ -96,7 +88,6 @@ local function isTargetVisible(character)
             return workspace:Raycast(origin, direction, params)
         end)
         if success and result == nil then
-            -- En az bir noktada görüş açıksa true döner
             return true
         end
     end
@@ -182,7 +173,6 @@ local function updateESP()
             continue
         end
 
-        -- Görüş rengi
         local visible = isTargetVisible(char)
         local color = visible and cfg.esp_visibleColor or cfg.esp_hiddenColor
 
@@ -224,7 +214,7 @@ local function updateESP()
 end
 
 -- ////////////////////////////////////////////////
--- // AIMBOT (Sürekli / Touch)
+-- // AIMBOT
 -- ////////////////////////////////////////////////
 local currentTarget = nil
 
@@ -329,21 +319,22 @@ end
 -- // SPEED HACK
 -- ////////////////////////////////////////////////
 local function applySpeed()
-    if not LocalPlayer.Character then return end
-    local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-    if hum then
-        hum.WalkSpeed = cfg.speed_on and cfg.speed_value or 16
+    if LocalPlayer.Character then
+        local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.WalkSpeed = cfg.speed_on and cfg.speed_value or 16
+        end
     end
 end
 
 LocalPlayer.CharacterAdded:Connect(applySpeed)
 
 -- ////////////////////////////////////////////////
--- // HAREKETLİ MODERN PANEL (Sol Kategorili)
+-- // PANEL (Hareketli, Kategorili)
 -- ////////////////////////////////////////////////
 local function createPanel()
     local gui = Instance.new("ScreenGui")
-    gui.Name = "RivalsPanel"
+    gui.Name = "RivalsHack"
     gui.Parent = game.CoreGui or LocalPlayer:WaitForChild("PlayerGui")
     gui.ResetOnSpawn = false
     gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
@@ -360,9 +351,8 @@ local function createPanel()
     openBtn.Parent = gui
     Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0, 20)
 
-    -- Ana panel (hareketli)
+    -- Panel
     local panel = Instance.new("Frame")
-    panel.Name = "MainPanel"
     panel.Size = UDim2.new(0, 280, 0, 220)
     panel.Position = UDim2.new(1, -290, 0, 60)
     panel.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
@@ -371,20 +361,20 @@ local function createPanel()
     panel.Parent = gui
     Instance.new("UICorner", panel).CornerRadius = UDim.new(0, 8)
 
-    -- Hareket ettirme
-    local dragging = false
+    -- Sürükleme
+    local drag = false
     local dragStart = nil
     local startPos = nil
     panel.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
+            drag = true
             dragStart = input.Position
             startPos = panel.Position
         end
     end)
-    panel.InputEnded:Connect(function() dragging = false end)
+    panel.InputEnded:Connect(function() drag = false end)
     panel.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        if drag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragStart
             panel.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
@@ -394,59 +384,49 @@ local function createPanel()
     local title = Instance.new("TextLabel")
     title.Size = UDim2.new(1, 0, 0, 28)
     title.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    title.Text = "Rivals Hack Panel"
+    title.Text = "Rivals Panel"
     title.TextColor3 = Color3.new(1,1,1)
     title.Font = Enum.Font.SourceSansBold
-    title.TextSize = 14
     title.Parent = panel
 
-    -- Sol kategori butonları
-    local sideBar = Instance.new("Frame")
-    sideBar.Size = UDim2.new(0, 80, 1, -28)
-    sideBar.Position = UDim2.new(0, 0, 0, 28)
-    sideBar.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-    sideBar.BorderSizePixel = 0
-    sideBar.Parent = panel
+    -- Sol menü
+    local sidebar = Instance.new("Frame")
+    sidebar.Size = UDim2.new(0, 80, 1, -28)
+    sidebar.Position = UDim2.new(0, 0, 0, 28)
+    sidebar.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    sidebar.Parent = panel
 
-    -- Sağ içerik alanı
+    -- Sağ içerik
     local content = Instance.new("Frame")
     content.Size = UDim2.new(1, -80, 1, -28)
     content.Position = UDim2.new(0, 80, 0, 28)
     content.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    content.BorderSizePixel = 0
     content.Parent = panel
 
-    -- Kategori butonları oluştur
-    local function addCategoryButton(name, yPos, contentFrame)
+    local currentPage = nil
+
+    local function showPage(page)
+        if currentPage then currentPage.Visible = false end
+        if page then page.Visible = true end
+        currentPage = page
+    end
+
+    -- Kategori butonları
+    local function addCategory(name, y, page)
         local btn = Instance.new("TextButton")
         btn.Size = UDim2.new(1, -6, 0, 32)
-        btn.Position = UDim2.new(0, 3, 0, yPos)
+        btn.Position = UDim2.new(0, 3, 0, y)
         btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
         btn.Text = name
         btn.TextColor3 = Color3.new(1,1,1)
         btn.Font = Enum.Font.SourceSansBold
         btn.TextSize = 13
-        btn.Parent = sideBar
-        btn.MouseButton1Click:Connect(function()
-            -- Tüm içerikleri gizle
-            for _, child in ipairs(content:GetChildren()) do
-                child.Visible = false
-            end
-            -- Seçili içerik çerçevesini göster
-            contentFrame.Visible = true
-        end)
-        return btn
+        btn.Parent = sidebar
+        btn.MouseButton1Click:Connect(function() showPage(page) end)
     end
 
-    -- ---- ESP İÇERİK ----
-    local espContent = Instance.new("Frame")
-    espContent.Size = UDim2.new(1, 0, 1, 0)
-    espContent.BackgroundTransparency = 1
-    espContent.Visible = true
-    espContent.Parent = content
-
-    local yPos = 5
-    local function addToggle(contentFrame, name, default, callback)
+    -- Toggle yardımcısı
+    local function addToggle(parent, name, default, callback, yPos)
         local btn = Instance.new("TextButton")
         btn.Size = UDim2.new(1, -10, 0, 28)
         btn.Position = UDim2.new(0, 5, 0, yPos)
@@ -455,7 +435,7 @@ local function createPanel()
         btn.TextColor3 = Color3.new(1,1,1)
         btn.Font = Enum.Font.SourceSans
         btn.TextSize = 12
-        btn.Parent = contentFrame
+        btn.Parent = parent
         local toggled = default
         btn.MouseButton1Click:Connect(function()
             toggled = not toggled
@@ -463,78 +443,75 @@ local function createPanel()
             btn.BackgroundColor3 = toggled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
             callback(toggled)
         end)
-        yPos = yPos + 30
+        return btn
     end
 
-    addToggle(espContent, "ESP", cfg.esp_on, function(v) cfg.esp_on = v end)
-    addToggle(espContent, "Kutu", cfg.esp_box, function(v) cfg.esp_box = v end)
-    addToggle(espContent, "İsim", cfg.esp_name, function(v) cfg.esp_name = v end)
-    addToggle(espContent, "Mesafe", cfg.esp_dist, function(v) cfg.esp_dist = v end)
-    addToggle(espContent, "Can Barı", cfg.esp_hp, function(v) cfg.esp_hp = v end)
+    -- SAYFA: ESP
+    local espPage = Instance.new("Frame")
+    espPage.Size = UDim2.new(1, 0, 1, 0)
+    espPage.BackgroundTransparency = 1
+    espPage.Parent = content
 
-    -- ---- AIMBOT İÇERİK ----
-    local aimContent = Instance.new("Frame")
-    aimContent.Size = UDim2.new(1, 0, 1, 0)
-    aimContent.BackgroundTransparency = 1
-    aimContent.Visible = false
-    aimContent.Parent = content
+    addToggle(espPage, "ESP", cfg.esp_on, function(v) cfg.esp_on = v end, 5)
+    addToggle(espPage, "Kutu", cfg.esp_box, function(v) cfg.esp_box = v end, 35)
+    addToggle(espPage, "İsim", cfg.esp_name, function(v) cfg.esp_name = v end, 65)
+    addToggle(espPage, "Mesafe", cfg.esp_dist, function(v) cfg.esp_dist = v end, 95)
+    addToggle(espPage, "Can Barı", cfg.esp_hp, function(v) cfg.esp_hp = v end, 125)
 
-    yPos = 5
-    addToggle(aimContent, "Aimbot", cfg.aim_on, function(v) cfg.aim_on = v end)
+    -- SAYFA: AIMBOT
+    local aimPage = Instance.new("Frame")
+    aimPage.Size = UDim2.new(1, 0, 1, 0)
+    aimPage.BackgroundTransparency = 1
+    aimPage.Parent = content
 
-    -- Aimbot modu
+    addToggle(aimPage, "Aimbot", cfg.aim_on, function(v) cfg.aim_on = v end, 5)
+
     local modeBtn = Instance.new("TextButton")
     modeBtn.Size = UDim2.new(1, -10, 0, 28)
-    modeBtn.Position = UDim2.new(0, 5, 0, yPos)
+    modeBtn.Position = UDim2.new(0, 5, 0, 35)
     modeBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
     modeBtn.Text = "Mod: " .. cfg.aim_mode
     modeBtn.TextColor3 = Color3.new(1,1,1)
     modeBtn.Font = Enum.Font.SourceSans
     modeBtn.TextSize = 12
-    modeBtn.Parent = aimContent
+    modeBtn.Parent = aimPage
     modeBtn.MouseButton1Click:Connect(function()
         cfg.aim_mode = (cfg.aim_mode == "Always") and "Touch" or "Always"
         modeBtn.Text = "Mod: " .. cfg.aim_mode
     end)
 
-    yPos = yPos + 30
-    addToggle(aimContent, "Takım Kontrol", cfg.team_check, function(v) cfg.team_check = v end)
+    addToggle(aimPage, "Takım Kontrol", cfg.team_check, function(v) cfg.team_check = v end, 65)
 
-    -- ---- SPEED İÇERİK ----
-    local speedContent = Instance.new("Frame")
-    speedContent.Size = UDim2.new(1, 0, 1, 0)
-    speedContent.BackgroundTransparency = 1
-    speedContent.Visible = false
-    speedContent.Parent = content
+    -- SAYFA: SPEED
+    local speedPage = Instance.new("Frame")
+    speedPage.Size = UDim2.new(1, 0, 1, 0)
+    speedPage.BackgroundTransparency = 1
+    speedPage.Parent = content
 
-    yPos = 5
-    addToggle(speedContent, "Speed Hack", cfg.speed_on, function(v)
+    addToggle(speedPage, "Speed Hack", cfg.speed_on, function(v)
         cfg.speed_on = v
         applySpeed()
-    end)
+    end, 5)
 
-    -- Değer göstergesi
     local speedLabel = Instance.new("TextLabel")
     speedLabel.Size = UDim2.new(1, -10, 0, 25)
-    speedLabel.Position = UDim2.new(0, 5, 0, yPos)
+    speedLabel.Position = UDim2.new(0, 5, 0, 38)
     speedLabel.BackgroundColor3 = Color3.fromRGB(40,40,40)
     speedLabel.Text = "Hız: " .. cfg.speed_value
     speedLabel.TextColor3 = Color3.new(1,1,1)
     speedLabel.Font = Enum.Font.SourceSansBold
     speedLabel.TextSize = 14
-    speedLabel.Parent = speedContent
-    yPos = yPos + 28
+    speedLabel.Parent = speedPage
 
-    -- Azalt / Artır
     local minusBtn = Instance.new("TextButton")
     minusBtn.Size = UDim2.new(0, 40, 0, 30)
-    minusBtn.Position = UDim2.new(0, 10, 0, yPos)
+    minusBtn.Position = UDim2.new(0, 10, 0, 68)
     minusBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
     minusBtn.Text = "-"
     minusBtn.TextColor3 = Color3.new(1,1,1)
     minusBtn.Font = Enum.Font.SourceSansBold
     minusBtn.TextSize = 20
-    minusBtn.Parent = speedContent
+    minusBtn.Parent = speedPage
     minusBtn.MouseButton1Click:Connect(function()
         cfg.speed_value = math.max(1, cfg.speed_value - 5)
         speedLabel.Text = "Hız: " .. cfg.speed_value
@@ -543,22 +520,45 @@ local function createPanel()
 
     local plusBtn = Instance.new("TextButton")
     plusBtn.Size = UDim2.new(0, 40, 0, 30)
-    plusBtn.Position = UDim2.new(1, -50, 0, yPos)
+    plusBtn.Position = UDim2.new(1, -50, 0, 68)
     plusBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
     plusBtn.Text = "+"
     plusBtn.TextColor3 = Color3.new(1,1,1)
     plusBtn.Font = Enum.Font.SourceSansBold
     plusBtn.TextSize = 20
-    plusBtn.Parent = speedContent
+    plusBtn.Parent = speedPage
     plusBtn.MouseButton1Click:Connect(function()
         cfg.speed_value = math.min(500, cfg.speed_value + 5)
         speedLabel.Text = "Hız: " .. cfg.speed_value
         if cfg.speed_on then applySpeed() end
     end)
 
-    -- Kategori butonları
-    addCategoryButton("ESP", 5, espContent)
-    addCategoryButton("AIMBOT", 42, aimContent)
-    addCategoryButton("SPEED", 79, speedContent)
+    -- Kategorileri ekle
+    addCategory("ESP", 5, espPage)
+    addCategory("AIMBOT", 42, aimPage)
+    addCategory("SPEED", 79, speedPage)
 
-    -- Panel aç/ka
+    showPage(espPage)
+
+    openBtn.MouseButton1Click:Connect(function()
+        panel.Visible = not panel.Visible
+    end)
+end
+
+-- ////////////////////////////////////////////////
+-- // BAŞLATMA
+-- ////////////////////////////////////////////////
+Players.PlayerRemoving:Connect(function(p) removeESP(p) end)
+Players.PlayerAdded:Connect(function(p)
+    p.CharacterAdded:Connect(function() if ESPData[p] then removeESP(p) end end)
+end)
+
+createPanel()
+applySpeed()
+
+RunService.RenderStepped:Connect(function()
+    updateESP()
+    updateAimbot()
+end)
+
+print("✅ Rivals Panel: ESP (görüş renkli) + Aimbot + Speed Hack aktif!")
