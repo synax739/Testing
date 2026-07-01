@@ -1,4 +1,4 @@
--- // Delta Mobil – Rivals: ESP (Görüş Renkli) + Aimbot + Speed + Hareketli Panel
+-- // Delta Mobil – Rivals: ESP (Gelişmiş Raycast) + Aimbot (Hareket Tahmini) + Speed Slider + Panel
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -20,15 +20,15 @@ local cfg = {
     aim_mode = "Always",
     aim_fov = 30,
     aim_maxDist = 500,
-    aim_smoothBase = 2.0,
+    aim_smoothBase = 1.8, -- daha hızlı tepki
     speed_on = false,
-    speed_value = 30,
+    speed_value = 16,      -- gerçek walkSpeed (slider'dan hesaplanacak)
     team_check = false
 }
 
--- ////////////////////////////////////////////////
--- // ESP SİSTEMİ
--- ////////////////////////////////////////////////
+-- ==============================================
+-- ESP SİSTEMİ (Raycast: FindPartOnRayWithIgnoreList)
+-- ==============================================
 local ESPData = {}
 
 local function newDrawing(t)
@@ -63,6 +63,7 @@ local function isInFront(pos)
     return Camera.CFrame.LookVector:Dot((pos - camPos).Unit) > 0
 end
 
+-- Görüş kontrolü (eski güvenilir yöntem)
 local function isTargetVisible(character)
     if not character then return false end
     local head = character:FindFirstChild("Head")
@@ -73,6 +74,7 @@ local function isTargetVisible(character)
     if not myChar then return false end
 
     local origin = Camera.CFrame.Position + Camera.CFrame.LookVector * 0.8
+    local ignoreList = {myChar, character}
 
     local targets = {}
     if head then table.insert(targets, head.Position) end
@@ -80,14 +82,9 @@ local function isTargetVisible(character)
 
     for _, targetPos in ipairs(targets) do
         local direction = (targetPos - origin).Unit * 500
-        local params = RaycastParams.new()
-        params.FilterDescendantsInstances = {myChar, character}
-        params.FilterType = Enum.RaycastFilterType.Blacklist
-
-        local success, result = pcall(function()
-            return workspace:Raycast(origin, direction, params)
-        end)
-        if success and result == nil then
+        local ray = Ray.new(origin, direction)
+        local hit = workspace:FindPartOnRayWithIgnoreList(ray, ignoreList)
+        if not hit then
             return true
         end
     end
@@ -117,7 +114,6 @@ local function getBox(character)
     }
 end
 
-local refreshCounter = 0
 local function updateESP()
     local my = LocalPlayer.Character
     for _, plr in ipairs(Players:GetPlayers()) do
@@ -173,6 +169,7 @@ local function updateESP()
             continue
         end
 
+        -- Görüş rengi (düzeltilmiş raycast)
         local visible = isTargetVisible(char)
         local color = visible and cfg.esp_visibleColor or cfg.esp_hiddenColor
 
@@ -205,17 +202,11 @@ local function updateESP()
             d.hpBar.Color = Color3.fromRGB(255 * (1 - hp), 255 * hp, 0)
         end
     end
-
-    refreshCounter = refreshCounter + 1
-    if refreshCounter >= math.random(300, 600) then
-        refreshCounter = 0
-        for plr, _ in pairs(ESPData) do removeESP(plr) end
-    end
 end
 
--- ////////////////////////////////////////////////
--- // AIMBOT
--- ////////////////////////////////////////////////
+-- ==============================================
+-- AIMBOT (Hareket Tahmini Eklenmiş)
+-- ==============================================
 local currentTarget = nil
 
 local function getBestTarget()
@@ -259,19 +250,20 @@ local function aimAt(targetPlayer)
     local targetPart = head or hrp
     if not targetPart then return false end
 
-    local targetPos = targetPart.Position
+    -- Hareket tahmini
+    local velocity = (hrp and hrp.Velocity) or Vector3.zero
+    local predictedPos = targetPart.Position + velocity * 0.15  -- 0.15 saniye ilerisi
     local camPos = Camera.CFrame.Position
-    local desiredLook = CFrame.lookAt(camPos, targetPos)
+    local desiredLook = CFrame.lookAt(camPos, predictedPos)
 
-    local randomSmooth = cfg.aim_smoothBase + math.random() * 1.5
-    local alpha = 1 / randomSmooth
-    if alpha > 1 then alpha = 1 end
+    local alpha = math.clamp(1 / cfg.aim_smoothBase, 0.1, 1)
     Camera.CFrame = Camera.CFrame:Lerp(desiredLook, alpha)
 
+    -- Karakteri yatayda döndür
     local myChar = LocalPlayer.Character
     if myChar and myChar:FindFirstChild("HumanoidRootPart") then
         local root = myChar.HumanoidRootPart
-        local flatTarget = Vector3.new(targetPos.X, root.Position.Y, targetPos.Z)
+        local flatTarget = Vector3.new(predictedPos.X, root.Position.Y, predictedPos.Z)
         local rootLookAt = CFrame.lookAt(root.Position, flatTarget)
         local hum = myChar:FindFirstChildOfClass("Humanoid")
         if hum then hum.AutoRotate = false end
@@ -299,7 +291,7 @@ local function updateAimbot()
     end
 
     aimTick = aimTick + 1
-    if aimTick % math.random(2, 3) ~= 0 then
+    if aimTick % 2 ~= 0 then
         if currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChildOfClass("Humanoid") then
             aimAt(currentTarget)
         end
@@ -315,23 +307,29 @@ local function updateAimbot()
     end
 end
 
--- ////////////////////////////////////////////////
--- // SPEED HACK
--- ////////////////////////////////////////////////
+-- ==============================================
+-- SPEED HACK (Otomatik yeniden uygulama)
+-- ==============================================
 local function applySpeed()
     if LocalPlayer.Character then
         local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then
-            hum.WalkSpeed = cfg.speed_on and cfg.speed_value or 16
+        if hum and cfg.speed_on then
+            hum.WalkSpeed = cfg.speed_value
         end
     end
 end
 
-LocalPlayer.CharacterAdded:Connect(applySpeed)
+LocalPlayer.CharacterAdded:Connect(function()
+    -- Yeniden doğduktan hemen sonra birkaç kere dene
+    for i = 1, 10 do
+        task.wait(0.1)
+        applySpeed()
+    end
+end)
 
--- ////////////////////////////////////////////////
--- // PANEL (Hareketli, Kategorili)
--- ////////////////////////////////////////////////
+-- ==============================================
+-- PANEL (Slider'lı Speed, Kategoriler)
+-- ==============================================
 local function createPanel()
     local gui = Instance.new("ScreenGui")
     gui.Name = "RivalsHack"
@@ -353,8 +351,8 @@ local function createPanel()
 
     -- Panel
     local panel = Instance.new("Frame")
-    panel.Size = UDim2.new(0, 280, 0, 220)
-    panel.Position = UDim2.new(1, -290, 0, 60)
+    panel.Size = UDim2.new(0, 300, 0, 240)
+    panel.Position = UDim2.new(1, -310, 0, 60)
     panel.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
     panel.BorderSizePixel = 0
     panel.Visible = false
@@ -482,7 +480,7 @@ local function createPanel()
 
     addToggle(aimPage, "Takım Kontrol", cfg.team_check, function(v) cfg.team_check = v end, 65)
 
-    -- SAYFA: SPEED
+    -- SAYFA: SPEED (Slider)
     local speedPage = Instance.new("Frame")
     speedPage.Size = UDim2.new(1, 0, 1, 0)
     speedPage.BackgroundTransparency = 1
@@ -490,75 +488,70 @@ local function createPanel()
 
     addToggle(speedPage, "Speed Hack", cfg.speed_on, function(v)
         cfg.speed_on = v
-        applySpeed()
+        if v then
+            applySpeed()
+        else
+            if LocalPlayer.Character then
+                local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+                if hum then hum.WalkSpeed = 16 end
+            end
+        end
     end, 5)
 
-    local speedLabel = Instance.new("TextLabel")
-    speedLabel.Size = UDim2.new(1, -10, 0, 25)
-    speedLabel.Position = UDim2.new(0, 5, 0, 38)
-    speedLabel.BackgroundColor3 = Color3.fromRGB(40,40,40)
-    speedLabel.Text = "Hız: " .. cfg.speed_value
-    speedLabel.TextColor3 = Color3.new(1,1,1)
-    speedLabel.Font = Enum.Font.SourceSansBold
-    speedLabel.TextSize = 14
-    speedLabel.Parent = speedPage
+    -- Slider yapımı
+    local sliderLabel = Instance.new("TextLabel")
+    sliderLabel.Size = UDim2.new(1, -10, 0, 20)
+    sliderLabel.Position = UDim2.new(0, 5, 0, 40)
+    sliderLabel.BackgroundTransparency = 1
+    sliderLabel.Text = "Gerçek Hız: " .. cfg.speed_value
+    sliderLabel.TextColor3 = Color3.new(1,1,1)
+    sliderLabel.Font = Enum.Font.SourceSans
+    sliderLabel.TextSize = 12
+    sliderLabel.Parent = speedPage
 
-    local minusBtn = Instance.new("TextButton")
-    minusBtn.Size = UDim2.new(0, 40, 0, 30)
-    minusBtn.Position = UDim2.new(0, 10, 0, 68)
-    minusBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
-    minusBtn.Text = "-"
-    minusBtn.TextColor3 = Color3.new(1,1,1)
-    minusBtn.Font = Enum.Font.SourceSansBold
-    minusBtn.TextSize = 20
-    minusBtn.Parent = speedPage
-    minusBtn.MouseButton1Click:Connect(function()
-        cfg.speed_value = math.max(1, cfg.speed_value - 5)
-        speedLabel.Text = "Hız: " .. cfg.speed_value
+    -- Slider çubuğu arkaplan
+    local sliderTrack = Instance.new("Frame")
+    sliderTrack.Size = UDim2.new(1, -20, 0, 10)
+    sliderTrack.Position = UDim2.new(0, 10, 0, 65)
+    sliderTrack.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    sliderTrack.BorderSizePixel = 0
+    sliderTrack.Parent = speedPage
+    Instance.new("UICorner", sliderTrack).CornerRadius = UDim.new(0, 5)
+
+    -- Slider doldurma (opsiyonel)
+    local sliderFill = Instance.new("Frame")
+    sliderFill.Size = UDim2.new(0, 0, 1, 0)
+    sliderFill.BackgroundColor3 = Color3.fromRGB(0, 180, 0)
+    sliderFill.BorderSizePixel = 0
+    sliderFill.Parent = sliderTrack
+    Instance.new("UICorner", sliderFill).CornerRadius = UDim.new(0, 5)
+
+    -- Tutamak
+    local handle = Instance.new("TextButton")
+    handle.Size = UDim2.new(0, 22, 0, 22)
+    handle.Position = UDim2.new(0, 0, 0.5, -11)
+    handle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    handle.Text = ""
+    handle.BorderSizePixel = 0
+    handle.Parent = sliderTrack
+    Instance.new("UICorner", handle).CornerRadius = UDim.new(1, 0)
+
+    -- Slider değer aralığı: min 16, max 100 (gerçek WalkSpeed 32-200)
+    local minSpeed = 16
+    local maxSpeed = 100
+    local function updateSliderValue(relativeX)
+        local trackWidth = sliderTrack.AbsoluteSize.X
+        local clampedX = math.clamp(relativeX, 0, trackWidth)
+        local fraction = clampedX / trackWidth
+        local rawValue = minSpeed + (maxSpeed - minSpeed) * fraction
+        cfg.speed_value = math.floor(rawValue + 0.5)
+        -- Gerçek WalkSpeed iki katı
+        local displaySpeed = cfg.speed_value * 2
+        sliderLabel.Text = "Gerçek Hız: " .. displaySpeed .. " (" .. cfg.speed_value .. ")"
+        handle.Position = UDim2.new(0, clampedX - handle.Size.X.Offset/2, 0.5, -11)
+        sliderFill.Size = UDim2.new(0, clampedX, 1, 0)
         if cfg.speed_on then applySpeed() end
-    end)
+    end
 
-    local plusBtn = Instance.new("TextButton")
-    plusBtn.Size = UDim2.new(0, 40, 0, 30)
-    plusBtn.Position = UDim2.new(1, -50, 0, 68)
-    plusBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
-    plusBtn.Text = "+"
-    plusBtn.TextColor3 = Color3.new(1,1,1)
-    plusBtn.Font = Enum.Font.SourceSansBold
-    plusBtn.TextSize = 20
-    plusBtn.Parent = speedPage
-    plusBtn.MouseButton1Click:Connect(function()
-        cfg.speed_value = math.min(500, cfg.speed_value + 5)
-        speedLabel.Text = "Hız: " .. cfg.speed_value
-        if cfg.speed_on then applySpeed() end
-    end)
-
-    -- Kategorileri ekle
-    addCategory("ESP", 5, espPage)
-    addCategory("AIMBOT", 42, aimPage)
-    addCategory("SPEED", 79, speedPage)
-
-    showPage(espPage)
-
-    openBtn.MouseButton1Click:Connect(function()
-        panel.Visible = not panel.Visible
-    end)
-end
-
--- ////////////////////////////////////////////////
--- // BAŞLATMA
--- ////////////////////////////////////////////////
-Players.PlayerRemoving:Connect(function(p) removeESP(p) end)
-Players.PlayerAdded:Connect(function(p)
-    p.CharacterAdded:Connect(function() if ESPData[p] then removeESP(p) end end)
-end)
-
-createPanel()
-applySpeed()
-
-RunService.RenderStepped:Connect(function()
-    updateESP()
-    updateAimbot()
-end)
-
-print("✅ Rivals Panel: ESP (görüş renkli) + Aimbot + Speed Hack aktif!")
+    -- Başlangıç konumu
+    local ini
