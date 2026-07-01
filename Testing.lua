@@ -1,7 +1,7 @@
--- // Delta Mobil – ESP (Stabil Kutu) + Aimbot (Anti-Ban, İsabetli)
--- // ESP: Eski Drawing yöntemi, kutu/isim/mesafe/can barı.
--- // Aimbot: En yakın hedefe FOV tabanlı, yumuşak ama sapmasız, hızı rastgele.
--- // Anti-Ban önlemleri: Değişken isimler, rastgele gecikmeler, temizleme patternleri.
+-- // Delta Mobil – Rivals ESP + Gelişmiş Aimbot (Görüş Kontrollü ESP, Optimize Aimbot)
+-- // ESP: Kutu + İsim + Mesafe + Can Barı, DUVAR ARKASI KIRMIZI, AÇIKTA YEŞİL
+-- // Aimbot: En yakın hedefe kilitlenir, kamera + karakter yatay dönüşü, butonsuz sürekli mod
+-- // Anti-Ban: Rastgele yenileme, değişken isimler, gecikmeler
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -9,25 +9,26 @@ local UserInputService = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
--- Şifreli ayarlar
+-- Ayarlar
 local cfg = {
     esp_on = true,
     esp_box = true,
     esp_name = true,
     esp_dist = true,
     esp_hp = true,
-    esp_color = Color3.fromRGB(255, 0, 0),
     esp_maxDist = 1000,
+    esp_visibleColor = Color3.fromRGB(0, 255, 0),   -- Görüş açıksa yeşil
+    esp_hiddenColor = Color3.fromRGB(255, 0, 0),    -- Duvar arkasıysa kırmızı
     aim_on = false,
-    aim_mode = "Touch", -- "Always" veya "Touch"
-    aim_fov = 30,        -- derece
+    aim_mode = "Always", -- "Always" veya "Touch"
+    aim_fov = 30,
     aim_maxDist = 500,
-    aim_smoothBase = 2.0, -- temel yumuşaklık, üzerine rastgele eklenir
+    aim_smoothBase = 2.0,
     team_check = false
 }
 
 -- ////////////////////////////////////////////////
--- // ESP SİSTEMİ (Drawing, rastgele sil/yeniden oluştur)
+-- // ESP SİSTEMİ (Raycast ile Görüş Kontrolü)
 -- ////////////////////////////////////////////////
 local ESPData = {}
 
@@ -63,6 +64,20 @@ local function isInFront(pos)
     return Camera.CFrame.LookVector:Dot((pos - camPos).Unit) > 0
 end
 
+-- Raycast ile görüş kontrolü: hedefe engel var mı?
+local function isVisible(targetPosition, character)
+    local myChar = LocalPlayer.Character
+    if not myChar then return false end
+    local origin = Camera.CFrame.Position
+    local direction = (targetPosition - origin).Unit * 500
+    local raycastParams = RaycastParams.new()
+    local ignoreList = {myChar, character}
+    raycastParams.FilterDescendantsInstances = ignoreList
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    local result = workspace:Raycast(origin, direction, raycastParams)
+    return result == nil -- nil ise engel yok, görüş açık
+end
+
 local function getBox(character)
     local head = character:FindFirstChild("Head")
     local hrp = character:FindFirstChild("HumanoidRootPart")
@@ -86,7 +101,6 @@ local function getBox(character)
     }
 end
 
--- Anti-Ban: ESP çizimlerini rastgele aralıklarla yeniden oluştur (pattern kırmak için)
 local refreshCounter = 0
 local function updateESP()
     local my = LocalPlayer.Character
@@ -143,11 +157,15 @@ local function updateESP()
             continue
         end
 
+        -- GÖRÜŞ KONTROLÜ: Hedefin pozisyonuna raycast gönder, engel yoksa yeşil, varsa kırmızı
+        local visible = isVisible(hrp.Position, char)
+        local color = visible and cfg.esp_visibleColor or cfg.esp_hiddenColor
+
         if cfg.esp_box and d.box then
             d.box.Visible = true
             d.box.Position = box.pos
             d.box.Size = box.size
-            d.box.Color = cfg.esp_color
+            d.box.Color = color
         end
         if cfg.esp_name and d.name then
             d.name.Visible = true
@@ -173,9 +191,8 @@ local function updateESP()
         end
     end
 
-    -- Rastgele yeniden oluşturma (10-20 saniyede bir)
     refreshCounter = refreshCounter + 1
-    if refreshCounter >= math.random(300, 600) then -- ~10-20 sn (60fps)
+    if refreshCounter >= math.random(300, 600) then
         refreshCounter = 0
         for plr, _ in pairs(ESPData) do
             removeESP(plr)
@@ -184,9 +201,8 @@ local function updateESP()
 end
 
 -- ////////////////////////////////////////////////
--- // AIMBOT (İsabetli, Anti-Ban)
+-- // AIMBOT (Gelişmiş En Yakın Hedef + Karakter Dönüşü)
 -- ////////////////////////////////////////////////
-local lastAimTime = 0
 local currentTarget = nil
 
 local function getBestTarget()
@@ -212,10 +228,13 @@ local function getBestTarget()
         local dist = (myPos - targetPos).Magnitude
         if dist >= bestDist then continue end
 
-        -- FOV kontrolü
+        -- FOV kontrolü (daha hassas)
         local toTarget = (targetPos - camPos).Unit
         local angle = math.acos(math.clamp(lookVec:Dot(toTarget), -1, 1))
         if angle > math.rad(cfg.aim_fov) then continue end
+
+        -- Görüş kontrolü: sadece görüş varsa hedef al (opsiyonel, istersen kaldır)
+        -- if not isVisible(targetPos, char) then continue end
 
         bestDist = dist
         best = plr
@@ -235,11 +254,25 @@ local function aimAt(targetPlayer)
     local camPos = Camera.CFrame.Position
     local desiredLook = CFrame.lookAt(camPos, targetPos)
 
-    -- Rastgele yumuşaklık (insansı, anticheat için)
+    -- Rastgele yumuşaklık (insansı)
     local randomSmooth = cfg.aim_smoothBase + math.random() * 1.5
     local alpha = 1 / randomSmooth
     if alpha > 1 then alpha = 1 end
     Camera.CFrame = Camera.CFrame:Lerp(desiredLook, alpha)
+
+    -- Karakteri yatayda hedefe döndür (aşağı bakmayı engelle, AutoRotate kapalı)
+    local myChar = LocalPlayer.Character
+    if myChar and myChar:FindFirstChild("HumanoidRootPart") then
+        local root = myChar.HumanoidRootPart
+        local flatTarget = Vector3.new(targetPos.X, root.Position.Y, targetPos.Z)
+        local rootLookAt = CFrame.lookAt(root.Position, flatTarget)
+        -- AutoRotate'i kapat (aşağı/yukarı bakmayı engelle)
+        local hum = myChar:FindFirstChildOfClass("Humanoid")
+        if hum then hum.AutoRotate = false end
+        pcall(function()
+            root.CFrame = root.CFrame:Lerp(rootLookAt, alpha)
+        end)
+    end
     return true
 end
 
@@ -250,12 +283,10 @@ local function updateAimbot()
         return
     end
 
-    -- Sadece gerekli modda çalış
     local shouldAim = false
     if cfg.aim_mode == "Always" then
         shouldAim = true
     elseif cfg.aim_mode == "Touch" then
-        -- Kullanıcı dokunuyor mu? (sol fare veya dokunmatik)
         shouldAim = UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) or
                     UserInputService:IsMouseButtonPressed(Enum.UserInputType.Touch)
     end
@@ -265,17 +296,14 @@ local function updateAimbot()
         return
     end
 
-    -- Hedefi her kare değil, 2-3 karede bir güncelle (anticheat)
     aimTick = aimTick + 1
     if aimTick % math.random(2, 3) ~= 0 then
         if currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChildOfClass("Humanoid") then
-            -- Mevcut hedefe devam et
             aimAt(currentTarget)
         end
         return
     end
 
-    -- Yeni hedef ara
     local newTarget = getBestTarget()
     if newTarget then
         currentTarget = newTarget
@@ -286,7 +314,7 @@ local function updateAimbot()
 end
 
 -- ////////////////////////////////////////////////
--- // MOBİL MENÜ (Gizli)
+-- // MOBİL MENÜ
 -- ////////////////////////////////////////////////
 local function createMenu()
     local gui = Instance.new("ScreenGui")
@@ -316,7 +344,7 @@ local function createMenu()
     local title = Instance.new("TextLabel", frame)
     title.Size = UDim2.new(1, 0, 0, 25)
     title.BackgroundColor3 = Color3.fromRGB(40,40,40)
-    title.Text = "Güvenli Panel"
+    title.Text = "Rivals Panel"
     title.TextColor3 = Color3.new(1,1,1)
     title.Font = Enum.Font.SourceSansBold
 
@@ -381,4 +409,4 @@ RunService.RenderStepped:Connect(function()
 end)
 
 createMenu()
-print("✅ ESP (eski sistem) ve Gelişmiş Aimbot hazır. Menü: sağ üst ⚙")
+print("✅ Rivals ESP (Görüş Kontrollü) + Gelişmiş Aimbot hazır! Menü: sağ üst ⚙")
