@@ -39,22 +39,42 @@ end
 local function createESP(plr)
     local d = {}
     d.box = newDrawing("Square")
-    if d.box then d.box.Thickness = 2 d.box.Filled = false end
+    if d.box then
+        d.box.Thickness = 2
+        d.box.Filled = false
+    end
     d.name = newDrawing("Text")
-    if d.name then d.name.Size = 13 d.name.Center = true d.name.Outline = true d.name.Color = Color3.new(1,1,1) end
+    if d.name then
+        d.name.Size = 13
+        d.name.Center = true
+        d.name.Outline = true
+        d.name.Color = Color3.new(1,1,1)
+    end
     d.dist = newDrawing("Text")
-    if d.dist then d.dist.Size = 12 d.dist.Center = true d.dist.Outline = true d.dist.Color = Color3.new(1,1,1) end
+    if d.dist then
+        d.dist.Size = 12
+        d.dist.Center = true
+        d.dist.Outline = true
+        d.dist.Color = Color3.new(1,1,1)
+    end
     d.hpBg = newDrawing("Square")
-    if d.hpBg then d.hpBg.Filled = true d.hpBg.Color = Color3.fromRGB(40,40,40) end
+    if d.hpBg then
+        d.hpBg.Filled = true
+        d.hpBg.Color = Color3.fromRGB(40,40,40)
+    end
     d.hpBar = newDrawing("Square")
-    if d.hpBar then d.hpBar.Filled = true end
+    if d.hpBar then
+        d.hpBar.Filled = true
+    end
     ESPData[plr] = d
 end
 
 local function removeESP(plr)
     local d = ESPData[plr]
     if not d then return end
-    for _, v in pairs(d) do pcall(function() v:Remove() end) end
+    for _, v in pairs(d) do
+        pcall(function() v:Remove() end)
+    end
     ESPData[plr] = nil
 end
 
@@ -73,13 +93,17 @@ local function isTargetVisible(character)
     local origin = Camera.CFrame.Position + Camera.CFrame.LookVector * 0.8
     local ignore = {myChar, character}
     local targets = {}
-    if head then table.insert(targets, head.Position) end
+    if head then
+        table.insert(targets, head.Position)
+    end
     table.insert(targets, hrp.Position + Vector3.new(0, 1.5, 0))
     for _, pos in ipairs(targets) do
         local dir = (pos - origin).Unit * 500
         local ray = Ray.new(origin, dir)
         local hit = workspace:FindPartOnRayWithIgnoreList(ray, ignore)
-        if not hit then return true end
+        if not hit then
+            return true
+        end
     end
     return false
 end
@@ -125,11 +149,15 @@ local function updateESP()
             continue
         end
         if not cfg.esp_on then
-            if ESPData[plr] then for _, v in pairs(ESPData[plr]) do v.Visible = false end end
+            if ESPData[plr] then
+                for _, v in pairs(ESPData[plr]) do v.Visible = false end
+            end
             continue
         end
         if not isInFront(hrp.Position) then
-            if ESPData[plr] then for _, v in pairs(ESPData[plr]) do v.Visible = false end end
+            if ESPData[plr] then
+                for _, v in pairs(ESPData[plr]) do v.Visible = false end
+            end
             continue
         end
         local dist = 0
@@ -137,7 +165,9 @@ local function updateESP()
             dist = (my.HumanoidRootPart.Position - hrp.Position).Magnitude
         end
         if dist > cfg.esp_maxDist then
-            if ESPData[plr] then for _, v in pairs(ESPData[plr]) do v.Visible = false end end
+            if ESPData[plr] then
+                for _, v in pairs(ESPData[plr]) do v.Visible = false end
+            end
             continue
         end
         if not ESPData[plr] then createESP(plr) end
@@ -150,15 +180,32 @@ local function updateESP()
         end
         local visible = isTargetVisible(char)
         local color = visible and cfg.esp_visibleColor or cfg.esp_hiddenColor
-        if cfg.esp_box and d.box then d.box.Visible = true d.box.Position = box.pos d.box.Size = box.size d.box.Color = color end
-        if cfg.esp_name and d.name then d.name.Visible = true d.name.Text = plr.Name d.name.Position = box.top - Vector2.new(0, 15) end
-        if cfg.esp_dist and d.dist then d.dist.Visible = true d.dist.Text = math.floor(dist) .. "m" d.dist.Position = box.bottom + Vector2.new(0, 2) end
+        if cfg.esp_box and d.box then
+            d.box.Visible = true
+            d.box.Position = box.pos
+            d.box.Size = box.size
+            d.box.Color = color
+        end
+        if cfg.esp_name and d.name then
+            d.name.Visible = true
+            d.name.Text = plr.Name
+            d.name.Position = box.top - Vector2.new(0, 15)
+        end
+        if cfg.esp_dist and d.dist then
+            d.dist.Visible = true
+            d.dist.Text = math.floor(dist) .. "m"
+            d.dist.Position = box.bottom + Vector2.new(0, 2)
+        end
         if cfg.esp_hp and d.hpBg and d.hpBar then
             local hp = hum.Health / hum.MaxHealth
             local barX = box.pos.X - 8
-            d.hpBg.Visible = true d.hpBg.Position = Vector2.new(barX, box.pos.Y) d.hpBg.Size = Vector2.new(3, box.size.Y)
+            d.hpBg.Visible = true
+            d.hpBg.Position = Vector2.new(barX, box.pos.Y)
+            d.hpBg.Size = Vector2.new(3, box.size.Y)
             local fill = box.size.Y * hp
-            d.hpBar.Visible = true d.hpBar.Position = Vector2.new(barX, box.pos.Y + (box.size.Y - fill)) d.hpBar.Size = Vector2.new(3, fill)
+            d.hpBar.Visible = true
+            d.hpBar.Position = Vector2.new(barX, box.pos.Y + (box.size.Y - fill))
+            d.hpBar.Size = Vector2.new(3, fill)
             d.hpBar.Color = Color3.fromRGB(255 * (1 - hp), 255 * hp, 0)
         end
     end
@@ -219,18 +266,26 @@ local function aimAt(targetPlayer)
         local rootLookAt = CFrame.lookAt(root.Position, flatTarget)
         local hum = myChar:FindFirstChildOfClass("Humanoid")
         if hum then hum.AutoRotate = false end
-        pcall(function() root.CFrame = root.CFrame:Lerp(rootLookAt, alpha) end)
+        pcall(function()
+            root.CFrame = root.CFrame:Lerp(rootLookAt, alpha)
+        end)
     end
     return true
 end
 
 local aimTick = 0
 local function updateAimbot()
-    if not cfg.aim_on then currentTarget = nil return end
+    if not cfg.aim_on then
+        currentTarget = nil
+        return
+    end
     local shouldAim = (cfg.aim_mode == "Always") or
         UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) or
         UserInputService:IsMouseButtonPressed(Enum.UserInputType.Touch)
-    if not shouldAim then currentTarget = nil return end
+    if not shouldAim then
+        currentTarget = nil
+        return
+    end
     aimTick = aimTick + 1
     if aimTick % 2 ~= 0 then
         if currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChildOfClass("Humanoid") then
@@ -239,7 +294,12 @@ local function updateAimbot()
         return
     end
     local newTarget = getBestTarget()
-    if newTarget then currentTarget = newTarget aimAt(currentTarget) else currentTarget = nil end
+    if newTarget then
+        currentTarget = newTarget
+        aimAt(currentTarget)
+    else
+        currentTarget = nil
+    end
 end
 
 -- ==============================================
@@ -292,10 +352,14 @@ local function createPanel()
     local startPos = nil
     panel.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            drag = true dragStart = input.Position startPos = panel.Position
+            drag = true
+            dragStart = input.Position
+            startPos = panel.Position
         end
     end)
-    panel.InputEnded:Connect(function() drag = false end)
+    panel.InputEnded:Connect(function()
+        drag = false
+    end)
     panel.InputChanged:Connect(function(input)
         if drag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragStart
@@ -340,7 +404,9 @@ local function createPanel()
         btn.Font = Enum.Font.SourceSansBold
         btn.TextSize = 13
         btn.Parent = sidebar
-        btn.MouseButton1Click:Connect(function() showPage(page) end)
+        btn.MouseButton1Click:Connect(function()
+            showPage(page)
+        end)
     end
 
     local function addToggle(parent, name, default, callback, yPos)
@@ -379,6 +445,7 @@ local function createPanel()
     aimPage.BackgroundTransparency = 1
     aimPage.Parent = content
     addToggle(aimPage, "Aimbot", cfg.aim_on, function(v) cfg.aim_on = v end, 5)
+
     local modeBtn = Instance.new("TextButton")
     modeBtn.Size = UDim2.new(1, -10, 0, 28)
     modeBtn.Position = UDim2.new(0, 5, 0, 35)
@@ -401,7 +468,8 @@ local function createPanel()
     speedPage.Parent = content
     addToggle(speedPage, "Speed Hack", cfg.speed_on, function(v)
         cfg.speed_on = v
-        if v then applySpeed() else
+        if v then applySpeed()
+        else
             if LocalPlayer.Character then
                 local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
                 if hum then hum.WalkSpeed = 16 end
@@ -458,11 +526,9 @@ local function createPanel()
         if cfg.speed_on then applySpeed() end
     end
 
-    -- Başlangıç değeri
     wait(0.1)
     updateSlider((cfg.speed_value - minSpeed) / (maxSpeed - minSpeed) * sliderTrack.AbsoluteSize.X)
 
-    -- Handle sürükleme
     handle.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
             local move, release
@@ -472,20 +538,4 @@ local function createPanel()
                 end
             end)
             release = UserInputService.InputEnded:Connect(function(ev)
-                if ev.UserInputType == Enum.UserInputType.Touch or ev.UserInputType == Enum.UserInputType.MouseButton1 then
-                    move:Disconnect() release:Disconnect()
-                end
-            end)
-        end
-    end)
-
-    -- Track tıklama
-    sliderTrack.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            updateSlider(input.Position.X - sliderTrack.AbsolutePosition.X)
-        end
-    end)
-
-    addCategory("ESP", 5, espPage)
-    addCategory("AIMBOT", 42, aimPage)
-    addCategory("SPEED", 79, sp
+                if ev.UserInputType == Enum.UserInputType.Touch or ev.UserInputType ==
