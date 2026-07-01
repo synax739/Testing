@@ -1,5 +1,6 @@
 -- // Delta Mobil – Rivals: TAM SÜRÜM (ESP + Aimbot + Speed + Panel)
--- // Can barı artık sadece yeşil, diğer özellikler aynı.
+-- // Aimbot: Hareket tahmini KALDIRILDI, doğrudan hedefin kendisine kilitlenir.
+-- // Can barı yeşil, diğer özellikler aynı.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -194,7 +195,7 @@ local function updateESP()
 end
 
 -- ==============================================
--- AIMBOT
+-- AIMBOT (TAHMİN YOK, doğrudan hedef pozisyonu)
 -- ==============================================
 local currentTarget = nil
 
@@ -236,16 +237,17 @@ local function aimAt(targetPlayer)
     local hrp = char:FindFirstChild("HumanoidRootPart")
     local targetPart = head or hrp
     if not targetPart then return false end
-    local velocity = (hrp and hrp.Velocity) or Vector3.zero
-    local predictedPos = targetPart.Position + velocity * 0.15
-    local desiredLook = CFrame.lookAt(Camera.CFrame.Position, predictedPos)
+
+    -- Doğrudan hedefin anlık pozisyonu (TAHMİN YOK)
+    local targetPos = targetPart.Position
+    local desiredLook = CFrame.lookAt(Camera.CFrame.Position, targetPos)
     local alpha = math.clamp(1 / cfg.aim_smoothBase, 0.1, 1)
     Camera.CFrame = Camera.CFrame:Lerp(desiredLook, alpha)
 
     local myChar = LocalPlayer.Character
     if myChar and myChar:FindFirstChild("HumanoidRootPart") then
         local root = myChar.HumanoidRootPart
-        local flatTarget = Vector3.new(predictedPos.X, root.Position.Y, predictedPos.Z)
+        local flatTarget = Vector3.new(targetPos.X, root.Position.Y, targetPos.Z)
         local rootLookAt = CFrame.lookAt(root.Position, flatTarget)
         local hum = myChar:FindFirstChildOfClass("Humanoid")
         if hum then hum.AutoRotate = false end
@@ -513,5 +515,5 @@ RunService.RenderStepped:Connect(function()
     updateAimbot()
 end)
 
-print("✅ Rivals TAM SÜRÜM: Panel + ESP + Aimbot + Speed Hack aktif!")
-print("   Can barı artık sadece yeşil.")
+print("✅ Rivals TAM SÜRÜM: Panel + ESP + Aimbot (tahminsiz) + Speed Hack aktif!")
+print
