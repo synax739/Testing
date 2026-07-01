@@ -1,7 +1,6 @@
--- // Delta Mobil – Rivals Aimbot v2 + Sürüklenebilir & Kilitlemeli GUI
+-- // Delta Mobil – Rivals Aimbot v4 (Yuvarlak Buton + Kilit)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
@@ -96,15 +95,12 @@ local function updateESP()
         if Settings.TeamCheck and LocalPlayer.Team and player.Team and LocalPlayer.Team == player.Team then continue end
 
         local char = player.Character
-        if not char then
-            if ESPObjects[player] then removeESP(player) end
-            continue
-        end
+        if not char then if ESPObjects[player] then removeESP(player) end continue end
+
         local hrp = char:FindFirstChild("HumanoidRootPart")
         local hum = char:FindFirstChildOfClass("Humanoid")
         if not hrp or not hum or hum.Health <= 0 then
-            if ESPObjects[player] then removeESP(player) end
-            continue
+            if ESPObjects[player] then removeESP(player) end continue
         end
 
         if not Settings.ESP then
@@ -208,32 +204,45 @@ local function updateAimbot()
     local targetData = getBestTarget()
     if targetData and targetData.TargetPart then
         local targetPos = targetData.TargetPart.Position + (targetData.TargetPart.Velocity * Settings.Prediction)
-
         local current = Camera.CFrame
         local targetCFrame = CFrame.lookAt(current.Position, targetPos)
         Camera.CFrame = current:Lerp(targetCFrame, Settings.AimbotSmoothness)
     end
 end
 
--- ====================== SÜRÜKLENEBİLİR + KİLİTLİ GUI ======================
+-- ====================== YUVARLAK BUTON + MENÜ ======================
 local function createMobileMenu()
     local gui = Instance.new("ScreenGui")
     gui.Name = "Kael_Rivals_Menu"
     gui.ResetOnSpawn = false
     gui.Parent = game.CoreGui or LocalPlayer:WaitForChild("PlayerGui")
 
+    -- Yuvarlak Buton
+    local toggleBtn = Instance.new("TextButton")
+    toggleBtn.Size = UDim2.new(0, 55, 0, 55)
+    toggleBtn.Position = UDim2.new(1, -70, 0, 20)
+    toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+    toggleBtn.Text = "⚙"
+    toggleBtn.TextColor3 = Color3.new(1,1,1)
+    toggleBtn.TextSize = 28
+    toggleBtn.Font = Enum.Font.GothamBold
+    toggleBtn.Parent = gui
+    Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(1, 0)
+
+    -- Menü Frame
     local menu = Instance.new("Frame")
-    menu.Size = UDim2.new(0, 240, 0, 420)
-    menu.Position = UDim2.new(0.5, -120, 0.3, 0)
-    menu.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    menu.Size = UDim2.new(0, 260, 0, 400)
+    menu.Position = UDim2.new(1, -280, 0, 90)
+    menu.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+    menu.Visible = false
     menu.Active = true
     menu.Draggable = true
     menu.Parent = gui
-    Instance.new("UICorner", menu).CornerRadius = UDim.new(0, 8)
+    Instance.new("UICorner", menu).CornerRadius = UDim.new(0, 10)
 
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 40)
-    title.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    title.Size = UDim2.new(1, 0, 0, 45)
+    title.BackgroundColor3 = Color3.fromRGB(0, 80, 180)
     title.Text = "KAEL 2456 - RIVALS"
     title.TextColor3 = Color3.new(1,1,1)
     title.Font = Enum.Font.GothamBold
@@ -242,18 +251,34 @@ local function createMobileMenu()
 
     local lockIcon = Instance.new("TextLabel")
     lockIcon.Size = UDim2.new(0, 30, 0, 30)
-    lockIcon.Position = UDim2.new(1, -35, 0, 5)
+    lockIcon.Position = UDim2.new(1, -38, 0, 8)
     lockIcon.BackgroundTransparency = 1
     lockIcon.Text = "🔓"
-    lockIcon.TextSize = 20
+    lockIcon.TextSize = 22
     lockIcon.TextColor3 = Color3.new(1,1,1)
     lockIcon.Visible = false
     lockIcon.Parent = menu
 
-    local y = 50
+    local y = 55
 
-    local function addToggle(...) -- (kısaltıldı)
-        -- ... (önceki toggle fonksiyonu aynı)
+    local function addToggle(name, default, key)
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, -20, 0, 40)
+        btn.Position = UDim2.new(0, 10, 0, y)
+        btn.BackgroundColor3 = default and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
+        btn.Text = name .. ": " .. (default and "ON" or "OFF")
+        btn.TextColor3 = Color3.new(1,1,1)
+        btn.Font = Enum.Font.Gotham
+        btn.TextSize = 14
+        btn.Parent = menu
+
+        btn.MouseButton1Click:Connect(function()
+            Settings[key] = not Settings[key]
+            local state = Settings[key]
+            btn.Text = name .. ": " .. (state and "ON" or "OFF")
+            btn.BackgroundColor3 = state and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
+        end)
+        y += 50
     end
 
     local function addSlider(name, key, minVal, maxVal)
@@ -268,9 +293,9 @@ local function createMobileMenu()
         y += 22
 
         local box = Instance.new("TextBox")
-        box.Size = UDim2.new(1, -20, 0, 30)
+        box.Size = UDim2.new(1, -20, 0, 34)
         box.Position = UDim2.new(0, 10, 0, y)
-        box.BackgroundColor3 = Color3.fromRGB(40,40,40)
+        box.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
         box.Text = tostring(Settings[key])
         box.TextColor3 = Color3.new(1,1,1)
         box.Parent = menu
@@ -284,7 +309,7 @@ local function createMobileMenu()
                 box.Text = tostring(Settings[key])
             end
         end)
-        y += 45
+        y += 48
     end
 
     addToggle("ESP", Settings.ESP, "ESP")
@@ -295,11 +320,15 @@ local function createMobileMenu()
     addSlider("FOV", "AimbotFOV", 40, 300)
     addSlider("Prediction", "Prediction", 0, 0.25)
 
-    -- Çift tıklama kilidi
-    menu.InputBegan:Connect(function(input)
+    -- Buton Kontrolleri
+    toggleBtn.MouseButton1Click:Connect(function()
+        menu.Visible = not menu.Visible
+    end)
+
+    toggleBtn.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Touch then
             local now = tick()
-            if now - lastTapTime < 0.4 then
+            if now - lastTapTime < 0.35 then
                 isGUILocked = not isGUILocked
                 menu.Draggable = not isGUILocked
                 lockIcon.Visible = isGUILocked
@@ -320,4 +349,4 @@ end)
 
 createMobileMenu()
 
-print("✅ v2 Yüklendi - Daha güçlü aimbot + Sürüklenebilir & Kilitlemeli GUI")
+print("✅ v4 Yüklendi - Yuvarlak Buton + Kilit Sistemi Aktif!")
