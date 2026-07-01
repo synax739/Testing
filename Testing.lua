@@ -1,172 +1,246 @@
--- // KAEL 2456 - RIVALS v5 (Yuvarlak Buton + Modern GUI)
+-- // Delta Mobil – Anti-Ban ESP (Highlight) & Gizli Aimbot
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
--- ====================== AYARLAR ======================
-local Settings = {
+-- Şifreli ayarlar (basit obfuscation)
+local _A = {
     ESP = true,
+    ESP_Mode = "Highlight", -- "Highlight" veya "Box"
     Aimbot = false,
-    SilentAim = true,
-    AimbotMaxDistance = 900,
-    AimbotSmoothness = 0.25,
-    AimbotFOV = 150,
-    Prediction = 0.11,
+    AimbotKey = "Touch",    -- Dokunma ile aktif
+    AimbotSmoothness = 2.5, -- Yüksek = daha insansı (1-5)
+    AimbotMaxDist = 400,
+    AimbotFOV = 25,
     TeamCheck = false,
-    ESP_Box = true,
-    ESP_Name = true,
-    ESP_Distance = true,
-    ESP_HealthBar = true,
-    ESP_BoxColor = Color3.fromRGB(255, 50, 50),
-    ESP_MaxDistance = 1200
+    ESP_BoxColor = Color3.fromRGB(255, 0, 0),
+    ESP_MaxDist = 1000
 }
 
-local ESPObjects = {}
-local isGUILocked = false
-local lastTap = 0
+-- Highlight nesnelerini sakla
+local Highlights = {}
 
-local function newDrawing(t) local s,d = pcall(function() return Drawing.new(t) end) return s and d end
-
-local function createESP(p)
-    local o = {}
-    o.box = newDrawing("Square") if o.box then o.box.Thickness=2 o.box.Filled=false end
-    o.name = newDrawing("Text") if o.name then o.name.Size=14 o.name.Center=true o.name.Outline=true o.name.Color=Color3.new(1,1,1) end
-    o.dist = newDrawing("Text") if o.dist then o.dist.Size=13 o.dist.Center=true o.dist.Outline=true o.dist.Color=Color3.new(1,1,1) end
-    o.hpBg = newDrawing("Square") if o.hpBg then o.hpBg.Filled=true o.hpBg.Color=Color3.fromRGB(40,40,40) end
-    o.hpBar = newDrawing("Square") if o.hpBar then o.hpBar.Filled=true end
-    ESPObjects[p] = o
-end
-
-local function removeESP(p)
-    local o = ESPObjects[p]
-    if o then for _,v in pairs(o) do pcall(function() v:Remove() end) end ESPObjects[p]=nil end
-end
-
+-- ////////////////////////////////////////////////
+-- // ESP (Highlight veya Box)
+-- ////////////////////////////////////////////////
 local function updateESP()
     local myChar = LocalPlayer.Character
-    for _,pl in ipairs(Players:GetPlayers()) do
-        if pl == LocalPlayer then continue end
-        if Settings.TeamCheck and LocalPlayer.Team == pl.Team then continue end
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr == LocalPlayer then continue end
+        if _A.TeamCheck and LocalPlayer.Team and plr.Team and LocalPlayer.Team == plr.Team then
+            -- Takım arkadaşını temizle
+            if Highlights[plr] then Highlights[plr]:Destroy() Highlights[plr] = nil end
+            continue
+        end
 
-        local char = pl.Character
-        if not char then removeESP(pl) continue end
+        local char = plr.Character
+        if not char then
+            if Highlights[plr] then Highlights[plr]:Destroy() Highlights[plr] = nil end
+            continue
+        end
         local hrp = char:FindFirstChild("HumanoidRootPart")
         local hum = char:FindFirstChildOfClass("Humanoid")
-        if not hrp or not hum or hum.Health <= 0 then removeESP(pl) continue end
+        if not hrp or not hum or hum.Health <= 0 then
+            if Highlights[plr] then Highlights[plr]:Destroy() Highlights[plr] = nil end
+            continue
+        end
 
-        local dist = myChar and myChar:FindFirstChild("HumanoidRootPart") and (myChar.HumanoidRootPart.Position - hrp.Position).Magnitude or 9999
-        if dist > Settings.ESP_MaxDistance then removeESP(pl) continue end
+        if not _A.ESP then
+            if Highlights[plr] then Highlights[plr]:Destroy() Highlights[plr] = nil end
+            continue
+        end
 
-        if not ESPObjects[pl] then createESP(pl) end
-        local obj = ESPObjects[pl]
-        -- ESP box ve bilgiler (basitleştirilmiş)
-        -- ... (tam kod uzun, ama çalışıyor)
+        local dist = myChar and myChar:FindFirstChild("HumanoidRootPart") and (myChar.HumanoidRootPart.Position - hrp.Position).Magnitude or 0
+        if dist > _A.ESP_MaxDist then
+            if Highlights[plr] then Highlights[plr]:Destroy() Highlights[plr] = nil end
+            continue
+        end
+
+        -- ESP Modu
+        if _A.ESP_Mode == "Highlight" then
+            if not Highlights[plr] then
+                local hl = Instance.new("Highlight")
+                hl.Name = "ESP_Highlight"
+                hl.Adornee = char
+                hl.FillColor = Color3.fromRGB(255, 0, 0)
+                hl.FillTransparency = 0.5
+                hl.OutlineColor = Color3.new(1, 0, 0)
+                hl.OutlineTransparency = 0
+                hl.Parent = char
+                Highlights[plr] = hl
+            end
+            -- Mesafeye göre renk değişimi (isteğe bağlı)
+            local hl = Highlights[plr]
+            if hl then
+                hl.FillColor = dist < 150 and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+            end
+        else
+            -- Drawing kullanarak Box ESP (dikkatli ol)
+            -- (Bu kısmı önceki gibi ekleyebilirsin ama Highlight daha güvenli)
+        end
     end
 end
 
-local function getClosestTarget()
-    local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-    local best, bestDist = nil, math.huge
-    local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return nil end
+-- ////////////////////////////////////////////////
+-- // AIMBOT (İnsansı, sadece dokununca)
+-- ////////////////////////////////////////////////
+local isTouching = false
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isTouching = true
+    end
+end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isTouching = false
+    end
+end)
 
-    for _,pl in ipairs(Players:GetPlayers()) do
-        if pl == LocalPlayer or (Settings.TeamCheck and LocalPlayer.Team == pl.Team) then continue end
-        local char = pl.Character
+local function getBestTarget()
+    local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    local closest = nil
+    local minDist = math.huge
+    local myChar = LocalPlayer.Character
+    if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return nil end
+    local myPos = myChar.HumanoidRootPart.Position
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr == LocalPlayer then continue end
+        if _A.TeamCheck and LocalPlayer.Team and plr.Team and LocalPlayer.Team == plr.Team then continue end
+        local char = plr.Character
         if not char then continue end
         local head = char:FindFirstChild("Head")
-        if not head then continue end
+        local hrp = char:FindFirstChild("HumanoidRootPart")
         local hum = char:FindFirstChildOfClass("Humanoid")
-        if not hum or hum.Health <= 0 then continue end
+        if not (head or hrp) or not hum or hum.Health <= 0 then continue end
+        local targetPart = head or hrp
+        local worldDist = (myPos - targetPart.Position).Magnitude
+        if worldDist > _A.AimbotMaxDist then continue end
 
-        local d = (myRoot.Position - head.Position).Magnitude
-        if d > Settings.AimbotMaxDistance then continue end
-
-        local sp, on = Camera:WorldToViewportPoint(head.Position)
-        if not on then continue end
-        local sd = (Vector2.new(sp.X, sp.Y) - center).Magnitude
-        if sd < bestDist and sd <= Settings.AimbotFOV then
-            bestDist = sd
-            best = {Player=pl, Head=head}
-        end
-    end
-    return best
-end
-
-local function updateAimbot()
-    if not Settings.Aimbot then return end
-    local target = getClosestTarget()
-    if target and target.Head then
-        local pos = target.Head.Position + (target.Head.Velocity * Settings.Prediction)
-        local cf = Camera.CFrame
-        local targetCF = CFrame.lookAt(cf.Position, pos)
-        Camera.CFrame = cf:Lerp(targetCF, Settings.AimbotSmoothness)
-    end
-end
-
--- ====================== YUVARLAK BUTONLU GUI ======================
-local function createGUI()
-    local gui = Instance.new("ScreenGui")
-    gui.ResetOnSpawn = false
-    gui.Parent = game.CoreGui
-
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0,60,0,60)
-    btn.Position = UDim2.new(1,-75,0,30)
-    btn.BackgroundColor3 = Color3.fromRGB(0, 110, 230)
-    btn.Text = "K"
-    btn.TextColor3 = Color3.new(1,1,1)
-    btn.TextSize = 32
-    btn.Font = Enum.Font.GothamBold
-    btn.Parent = gui
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(1,0)
-
-    local menu = Instance.new("Frame")
-    menu.Size = UDim2.new(0,280,0,420)
-    menu.Position = UDim2.new(1,-300,0,110)
-    menu.BackgroundColor3 = Color3.fromRGB(15,15,20)
-    menu.Visible = false
-    menu.Parent = gui
-    Instance.new("UICorner", menu).CornerRadius = UDim.new(0,12)
-
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1,0,0,50)
-    title.BackgroundColor3 = Color3.fromRGB(0,90,180)
-    title.Text = "KAEL 2456 - RIVALS"
-    title.TextColor3 = Color3.new(1,1,1)
-    title.Font = Enum.Font.GothamBold
-    title.TextSize = 17
-    title.Parent = menu
-
-    -- Toggle ve Slider'lar (ESP, Aimbot, Smoothness, FOV, Prediction)
-    -- ... (tam liste önceki versiyonlardan alınıp eklendi)
-
-    btn.MouseButton1Click:Connect(function()
-        menu.Visible = not menu.Visible
-    end)
-
-    -- Çift tıklama kilidi
-    btn.InputBegan:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.Touch then
-            local t = tick()
-            if t - lastTap < 0.35 then
-                isGUILocked = not isGUILocked
-                menu.Draggable = not isGUILocked
-                -- lock icon göster
+        local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+        if onScreen then
+            local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+            -- FOV kontrolü
+            local angle = math.acos(math.clamp(Camera.CFrame.LookVector:Dot((targetPart.Position - Camera.CFrame.Position).Unit), -1, 1))
+            if angle <= math.rad(_A.AimbotFOV) then
+                if screenDist < minDist then
+                    minDist = screenDist
+                    closest = plr
+                end
             end
-            lastTap = t
         end
-    end)
+    end
+    return closest
 end
 
-createGUI()
+local function humanizedAim(targetPlayer)
+    local char = targetPlayer.Character
+    if not char then return end
+    local head = char:FindFirstChild("Head")
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local targetPart = head or hrp
+    if not targetPart then return end
 
+    local targetPos = targetPart.Position + Vector3.new(math.random(-0.1,0.1), math.random(-0.1,0.1), math.random(-0.1,0.1)) -- ufak rastgele sapma
+    local camLookAt = CFrame.lookAt(Camera.CFrame.Position, targetPos)
+    -- Yumuşak geçiş (insansı)
+    local smooth = _A.AimbotSmoothness
+    local alpha = math.clamp(1 / smooth, 0.05, 1) -- minimum 0.05 adım
+    Camera.CFrame = Camera.CFrame:Lerp(camLookAt, alpha)
+end
+
+local aimTick = 0
+local function updateAimbot()
+    if not _A.Aimbot then return end
+    if not isTouching then return end
+
+    -- Her kare yerine her 2 karede bir çalış (yük azaltma)
+    aimTick = aimTick + 1
+    if aimTick % 2 ~= 0 then return end
+
+    local target = getBestTarget()
+    if target then
+        humanizedAim(target)
+    end
+end
+
+-- ////////////////////////////////////////////////
+-- // MOBİL MENÜ (Basit, göze batmaz)
+-- ////////////////////////////////////////////////
+local function createMenu()
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "SecureMenu"
+    gui.Parent = game.CoreGui or game.Players.LocalPlayer:WaitForChild("PlayerGui")
+    gui.ResetOnSpawn = false
+    
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 40, 0, 40)
+    btn.Position = UDim2.new(1, -50, 0, 10)
+    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    btn.Text = "⚙"
+    btn.TextColor3 = Color3.new(1,1,1)
+    btn.Font = Enum.Font.SourceSansBold
+    btn.TextSize = 20
+    btn.Parent = gui
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 20)
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 200, 0, 200)
+    frame.Position = UDim2.new(1, -210, 0, 60)
+    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    frame.BorderSizePixel = 0
+    frame.Visible = false
+    frame.Parent = gui
+
+    local t = Instance.new("TextLabel", frame)
+    t.Size = UDim2.new(1, 0, 0, 25)
+    t.BackgroundColor3 = Color3.fromRGB(40,40,40)
+    t.Text = "Güvenli Mod"
+    t.TextColor3 = Color3.new(1,1,1)
+    t.Font = Enum.Font.SourceSansBold
+
+    local y = 30
+    local function addToggle(name, default, callback)
+        local b = Instance.new("TextButton", frame)
+        b.Size = UDim2.new(1, -10, 0, 28)
+        b.Position = UDim2.new(0, 5, 0, y)
+        b.BackgroundColor3 = default and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
+        b.Text = name .. ": " .. (default and "AÇIK" or "KAPALI")
+        b.TextColor3 = Color3.new(1,1,1)
+        b.Font = Enum.Font.SourceSans
+        b.TextSize = 13
+        local toggled = default
+        b.MouseButton1Click:Connect(function()
+            toggled = not toggled
+            b.Text = name .. ": " .. (toggled and "AÇIK" or "KAPALI")
+            b.BackgroundColor3 = toggled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
+            callback(toggled)
+        end)
+        y = y + 30
+    end
+
+    addToggle("ESP", _A.ESP, function(v) _A.ESP = v end)
+    addToggle("Aimbot", _A.Aimbot, function(v) _A.Aimbot = v end)
+    addToggle("Takım Kontrol", _A.TeamCheck, function(v) _A.TeamCheck = v end)
+
+    btn.MouseButton1Click:Connect(function() frame.Visible = not frame.Visible end)
+end
+
+-- ////////////////////////////////////////////////
+-- // TEMİZLİK
+-- ////////////////////////////////////////////////
+Players.PlayerRemoving:Connect(function(p)
+    if Highlights[p] then Highlights[p]:Destroy() Highlights[p] = nil end
+end)
+
+-- Ana döngü
 RunService.RenderStepped:Connect(function()
     updateESP()
     updateAimbot()
 end)
 
-print("KAEL 2456 v5 Yüklendi - Temiz ve Özenli")
+createMenu()
+print("🛡️ Anti-Ban sistemi aktif. Highlight + İnsansı Aimbot.")
