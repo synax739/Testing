@@ -1,6 +1,7 @@
--- // Delta Mobil – ESP + Gelişmiş Smooth Aimbot (Düzeltilmiş)
+-- // Delta Mobil – ESP + Rivals Optimized Aimbot (Ayarlanabilir GUI)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
@@ -9,9 +10,10 @@ local LocalPlayer = Players.LocalPlayer
 local Settings = {
     ESP = true,
     Aimbot = false,
-    AimbotMaxDistance = 600,
-    AimbotSmoothness = 0.18,      -- Yumuşaklık ayarı (0.1-0.25 arası önerilir)
-    AimbotFOV = 110,
+    AimbotMaxDistance = 700,
+    AimbotSmoothness = 0.22,
+    AimbotFOV = 130,
+    Prediction = 0.08,
     TeamCheck = false,
 
     ESP_Box = true,
@@ -54,7 +56,7 @@ end
 local function isInFront(position)
     local camPos = Camera.CFrame.Position
     local toTarget = (position - camPos).Unit
-    return Camera.CFrame.LookVector:Dot(toTarget) > 0
+    return Camera.CFrame.LookVector:Dot(toTarget) > 0.08
 end
 
 local function getESPBox(character)
@@ -81,12 +83,10 @@ local function getESPBox(character)
         Position = Vector2.new(boxX, boxY),
         Size = Vector2.new(boxW, boxH),
         TopCenter = Vector2.new(centerX, boxY),
-        BottomCenter = Vector2.new(centerX, boxY + boxH),
-        OnScreen = true
+        BottomCenter = Vector2.new(centerX, boxY + boxH)
     }
 end
 
--- ====================== ESP (ESKİ HALİ) ======================
 local function updateESP()
     local myChar = LocalPlayer.Character
     for _, player in ipairs(Players:GetPlayers()) do
@@ -174,36 +174,43 @@ local function updateESP()
     end
 end
 
--- ====================== GELİŞMİŞ AIMBOT ======================
-local function getClosestToCenter()
+local function getBestTarget()
     local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
     local closestPlayer = nil
     local closestDist = math.huge
 
     local myChar = LocalPlayer.Character
-    if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return nil end
-    local myPos = myChar.HumanoidRootPart.Position
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return nil end
 
     for _, player in ipairs(Players:GetPlayers()) do
         if player == LocalPlayer then continue end
         if Settings.TeamCheck and LocalPlayer.Team and player.Team and LocalPlayer.Team == player.Team then continue end
+
         local char = player.Character
         if not char then continue end
+
         local head = char:FindFirstChild("Head")
-        local hrp = char:FindFirstChild("HumanoidRootPart")
+        local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
         local hum = char:FindFirstChildOfClass("Humanoid")
-        if not (head or hrp) or not hum or hum.Health <= 0 then continue end
-        local targetPart = head or hrp
-        local dist = (myPos - targetPart.Position).Magnitude
+
+        if not hum or hum.Health <= 0 then continue end
+
+        local targetPart = head or torso
+        if not targetPart then continue end
+
+        local dist = (myRoot.Position - targetPart.Position).Magnitude
         if dist > Settings.AimbotMaxDistance then continue end
 
         local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
-        if onScreen then
-            local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
-            if screenDist < closestDist and screenDist <= Settings.AimbotFOV then
-                closestDist = screenDist
-                closestPlayer = player
-            end
+        if not onScreen then continue end
+
+        local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+        if screenDist > Settings.AimbotFOV then continue end
+
+        if screenDist < closestDist then
+            closestDist = screenDist
+            closestPlayer = {Player = player, TargetPart = targetPart}
         end
     end
     return closestPlayer
@@ -212,97 +219,128 @@ end
 local function updateAimbot()
     if not Settings.Aimbot then return end
 
-    local target = getClosestToCenter()
-    if target then
-        local char = target.Character
-        if char then
-            local head = char:FindFirstChild("Head")
-            local targetPart = head or char:FindFirstChild("HumanoidRootPart")
-            if targetPart then
-                local current = Camera.CFrame
-                local targetCFrame = CFrame.lookAt(current.Position, targetPart.Position)
-                Camera.CFrame = current:Lerp(targetCFrame, Settings.AimbotSmoothness)
-            end
-        end
+    local targetData = getBestTarget()
+    if targetData and targetData.TargetPart then
+        local targetPos = targetData.TargetPart.Position
+        local velocity = targetData.TargetPart.Velocity or Vector3.new(0,0,0)
+        targetPos = targetPos + velocity * Settings.Prediction
+
+        local current = Camera.CFrame
+        local targetCFrame = CFrame.lookAt(current.Position, targetPos)
+        Camera.CFrame = current:Lerp(targetCFrame, Settings.AimbotSmoothness)
     end
 end
 
--- ====================== MOBİL MENÜ ======================
+-- ====================== GELİŞTİRİLMİŞ MOBİL MENÜ ======================
 local function createMobileMenu()
     local gui = Instance.new("ScreenGui")
-    gui.Name = "MobileESP_Aimbot"
-    gui.Parent = game.CoreGui or game.Players.LocalPlayer:WaitForChild("PlayerGui")
+    gui.Name = "Kael_Rivals_Menu"
     gui.ResetOnSpawn = false
-    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    gui.Parent = game.CoreGui or LocalPlayer:WaitForChild("PlayerGui")
 
-    local toggleMenuBtn = Instance.new("TextButton")
-    toggleMenuBtn.Size = UDim2.new(0, 45, 0, 45)
-    toggleMenuBtn.Position = UDim2.new(1, -55, 0, 10)
-    toggleMenuBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-    toggleMenuBtn.Text = "E"
-    toggleMenuBtn.TextColor3 = Color3.new(1,1,1)
-    toggleMenuBtn.Font = Enum.Font.SourceSansBold
-    toggleMenuBtn.TextSize = 22
-    toggleMenuBtn.Parent = gui
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(1, 0)
-    corner.Parent = toggleMenuBtn
+    local mainBtn = Instance.new("TextButton")
+    mainBtn.Size = UDim2.new(0, 50, 0, 50)
+    mainBtn.Position = UDim2.new(1, -60, 0, 15)
+    mainBtn.BackgroundColor3 = Color3.fromRGB(220, 0, 80)
+    mainBtn.Text = "⚙"
+    mainBtn.TextColor3 = Color3.new(1,1,1)
+    mainBtn.TextSize = 28
+    mainBtn.Font = Enum.Font.GothamBold
+    mainBtn.Parent = gui
+    Instance.new("UICorner", mainBtn).CornerRadius = UDim.new(1,0)
 
-    local menuFrame = Instance.new("Frame")
-    menuFrame.Name = "MainMenu"
-    menuFrame.Size = UDim2.new(0, 200, 0, 260)
-    menuFrame.Position = UDim2.new(1, -210, 0, 65)
-    menuFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-    menuFrame.BorderSizePixel = 0
-    menuFrame.Visible = false
-    menuFrame.Parent = gui
+    local menu = Instance.new("Frame")
+    menu.Size = UDim2.new(0, 240, 0, 420)
+    menu.Position = UDim2.new(1, -255, 0, 75)
+    menu.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    menu.Visible = false
+    menu.Parent = gui
+    Instance.new("UICorner", menu).CornerRadius = UDim.new(0, 8)
 
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 30)
-    title.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-    title.Text = "ESP & Aimbot"
+    title.Size = UDim2.new(1, 0, 0, 40)
+    title.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    title.Text = "KAEL 2456 - RIVALS"
     title.TextColor3 = Color3.new(1,1,1)
-    title.Font = Enum.Font.SourceSansBold
+    title.Font = Enum.Font.GothamBold
     title.TextSize = 16
-    title.Parent = menuFrame
+    title.Parent = menu
 
-    local yOffset = 35
-    local function addToggle(name, default, callback)
+    local y = 50
+
+    local function addToggle(name, default, key)
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, -10, 0, 32)
-        btn.Position = UDim2.new(0, 5, 0, yOffset)
-        btn.BackgroundColor3 = default and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 0, 0)
+        btn.Size = UDim2.new(1, -20, 0, 36)
+        btn.Position = UDim2.new(0, 10, 0, y)
+        btn.BackgroundColor3 = default and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
         btn.Text = name .. ": " .. (default and "ON" or "OFF")
         btn.TextColor3 = Color3.new(1,1,1)
-        btn.Font = Enum.Font.SourceSans
         btn.TextSize = 14
-        btn.Parent = menuFrame
+        btn.Font = Enum.Font.Gotham
+        btn.Parent = menu
 
-        local toggled = default
         btn.MouseButton1Click:Connect(function()
-            toggled = not toggled
-            btn.Text = name .. ": " .. (toggled and "ON" or "OFF")
-            btn.BackgroundColor3 = toggled and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 0, 0)
-            if callback then callback(toggled) end
+            Settings[key] = not Settings[key]
+            local state = Settings[key]
+            btn.Text = name .. ": " .. (state and "ON" or "OFF")
+            btn.BackgroundColor3 = state and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
         end)
-        yOffset = yOffset + 35
+        y += 46
     end
 
-    addToggle("ESP", Settings.ESP, function(val) Settings.ESP = val end)
-    addToggle("Aimbot", Settings.Aimbot, function(val) Settings.Aimbot = val end)
-    addToggle("Team Check", Settings.TeamCheck, function(val) Settings.TeamCheck = val end)
-    addToggle("Box", Settings.ESP_Box, function(val) Settings.ESP_Box = val end)
-    addToggle("Name", Settings.ESP_Name, function(val) Settings.ESP_Name = val end)
-    addToggle("Distance", Settings.ESP_Distance, function(val) Settings.ESP_Distance = val end)
-    addToggle("Health Bar", Settings.ESP_HealthBar, function(val) Settings.ESP_HealthBar = val end)
+    local function addSlider(name, key, minVal, maxVal, step)
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, -20, 0, 20)
+        label.Position = UDim2.new(0, 10, 0, y)
+        label.BackgroundTransparency = 1
+        label.Text = name .. ": " .. Settings[key]
+        label.TextColor3 = Color3.new(1,1,1)
+        label.TextSize = 13
+        label.Font = Enum.Font.Gotham
+        label.Parent = menu
+        y += 22
 
-    toggleMenuBtn.MouseButton1Click:Connect(function()
-        menuFrame.Visible = not menuFrame.Visible
+        local box = Instance.new("TextBox")
+        box.Size = UDim2.new(1, -20, 0, 30)
+        box.Position = UDim2.new(0, 10, 0, y)
+        box.BackgroundColor3 = Color3.fromRGB(40,40,40)
+        box.Text = tostring(Settings[key])
+        box.TextColor3 = Color3.new(1,1,1)
+        box.ClearTextOnFocus = false
+        box.Parent = menu
+        Instance.new("UICorner", box).CornerRadius = UDim.new(0, 6)
+
+        box.FocusLost:Connect(function()
+            local num = tonumber(box.Text)
+            if num then
+                num = math.clamp(num, minVal, maxVal)
+                Settings[key] = num
+                label.Text = name .. ": " .. num
+                box.Text = tostring(num)
+            else
+                box.Text = tostring(Settings[key])
+            end
+        end)
+        y += 45
+    end
+
+    -- Toggle'lar
+    addToggle("ESP", Settings.ESP, "ESP")
+    addToggle("Aimbot", Settings.Aimbot, "Aimbot")
+    addToggle("Team Check", Settings.TeamCheck, "TeamCheck")
+
+    -- Slider'lar (Ayarlanabilir değerler)
+    addSlider("Smoothness", "AimbotSmoothness", 0.05, 0.6, 0.01)
+    addSlider("FOV", "AimbotFOV", 30, 300, 5)
+    addSlider("Prediction", "Prediction", 0, 0.25, 0.01)
+
+    mainBtn.MouseButton1Click:Connect(function()
+        menu.Visible = not menu.Visible
     end)
 end
 
--- ====================== BAŞLATMA ======================
-Players.PlayerRemoving:Connect(function(p) removeESP(p) end)
+-- ====================== BAŞLAT ======================
+Players.PlayerRemoving:Connect(removeESP)
 
 RunService.RenderStepped:Connect(function()
     updateESP()
@@ -311,4 +349,4 @@ end)
 
 createMobileMenu()
 
-print("✅ ESP eski haline getirildi + Düzeltilmiş Aimbot aktif!")
+print("✅ Ayarlanabilir GUI Yüklendi! Smoothness, FOV ve Prediction menüden değiştirilebilir.")
